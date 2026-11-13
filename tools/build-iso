@@ -60,7 +60,14 @@ mkdir -p -- "$out_dir" "$log_dir"
 # The profile's pacman.conf names the local repo with a placeholder, so no
 # machine-specific path is committed. Arch repos use one explicit mirror.
 pacman_conf="$build_root/pacman.conf"
+iso_cache="$build_root/iso-cache"
+mkdir -p -- "$iso_cache"
+# Local packages are often rebuilt at the same version, so drop cached copies.
+for file in "$repo_dir"/*.pkg.tar.zst; do
+  rm -f -- "$iso_cache/${file##*/}" "$iso_cache/${file##*/}.sig"
+done
 sed -e "s|@PYRE_REPO_DIR@|$repo_dir|" \
+  -e "s|@PYRE_ISO_CACHE_DIR@|$iso_cache|" \
   -e "s|^Include = /etc/pacman.d/mirrorlist\$|Server = $mirror|" \
   "$profile_dir/pacman.conf" > "$pacman_conf"
 if grep -q '^Include = /etc/pacman.d/mirrorlist' "$pacman_conf"; then
@@ -140,6 +147,6 @@ fi
 
 chown "$owner" "$out_dir"/*.iso
 # Let the user inspect and clean the staged profile and offline cache without sudo.
-chown -R "$owner" "$staged_dir" "$build_root/offline"
+chown -R "$owner" "$staged_dir" "$build_root/offline" "$iso_cache"
 iso="$(find "$out_dir" -maxdepth 1 -name '*.iso' -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
 printf '\nBuilt %s (%s) in %ds\n' "$iso" "$(du -h -- "$iso" | cut -f1)" "$((SECONDS - start))"
