@@ -27,6 +27,7 @@ Everything not listed here is byte-identical to upstream, including symlinks.
    - packages: `cloud-init`, `hyperv`, `open-vm-tools`, `qemu-guest-agent`, `virtualbox-guest-utils-nox`
    - their enablement symlinks in `airootfs/etc/systemd/system/`: `cloud-init.target.wants/` (5 units), and `hv_fcopy_daemon`, `hv_kvp_daemon`, `hv_vss_daemon`, `vboxservice`, `vmtoolsd` and `vmware-vmblock-fuse` from `multi-user.target.wants/`
 7. **No `systemd-time-wait-sync`** (P2): its `sysinit.target.wants/` symlink is removed. releng orders `pacman-init.service` after `time-sync.target`, so without a network the keyring never initialized and offline installs hung, as did getty on other VTs. `systemd-timesyncd` still syncs the clock whenever a network is available.
+8. **PyreOS boot menus and motd** (P4): the systemd-boot, GRUB and syslinux entries say "PyreOS install medium" instead of "Arch Linux install medium", and the live `/etc/motd` points at `pyre-install`. Arch's trademark policy does not let a derivative present itself as Arch. The releng boot splash (`syslinux/splash.png`) is still Arch artwork until P5 replaces it.
 
 `tools/check-profile` enforces the serial console, the required files, `[pyre]` as the last repository, and the presence of `pyre-base`.
 

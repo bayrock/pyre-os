@@ -10,7 +10,7 @@ Both P4 exit tests pass from network installs (STATUS).
    - the user to make the repository public in GitHub settings
    - a release signing key with a CI-held subkey, which the user creates and stores as an Actions secret (ADR 0009)
    - then a CI job that builds, signs and uploads `[pyre]`, and a `pyre-release` mirrorlist that points at the release
-4. **Before announcing anything:** the ISO's boot menus still say "Arch Linux install medium", and the releng splash carries Arch artwork. Arch's trademark policy does not let a derivative present itself as Arch. The text is a quick fix; the artwork is P5.
+4. **Before announcing anything:** replace the releng boot splash (`iso/syslinux/splash.png`), which is Arch artwork. The menu text already says PyreOS. The artwork is P5.
 
 ## Dev loop reference
 
