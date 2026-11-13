@@ -60,6 +60,8 @@ stage_first_boot() {
   expect cmdline-append 'grep -c "^KERNEL_CMDLINE\[default\]+=" /etc/default/limine' '^1$'
   # shellcheck disable=SC2016 # typed into the guest verbatim.
   expect pyre-section 'grep -c "^\[pyre\]" /etc/pacman.conf; sed -n "/^\[pyre\]/,\$p" /etc/pacman.conf | grep -c -e "^SigLevel = Required DatabaseOptional$" -e "^Include = /etc/pacman.d/pyre-mirrorlist$"' '^2$'
+  expect arch-repos 'grep -c pyre-offline /etc/pacman.conf; pacman-conf -r core Server | head -n 1' '^https://'
+  expect no-offline-repo 'grep -c pyre-offline /etc/pacman.conf || true' '^0$'
   expect pyre-section-once 'grep -c "^\[pyre\]" /etc/pacman.conf' '^1$'
   expect pyre-mirror 'cat /etc/pacman.d/pyre-mirrorlist' '^Server = '"$pyre_repo"'$'
   expect pyre-doctor 'pyre doctor 2>&1 | tail -n 1' '^pyre doctor: no failures$'

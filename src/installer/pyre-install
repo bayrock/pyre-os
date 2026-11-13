@@ -46,6 +46,10 @@ check_disk() {
 # Use the ISO's offline repository when it exists (ADR 0006); otherwise keep
 # the live system's pacman.conf (network install, used in development).
 use_offline_repo() {
+  install -d -m 700 "$RUN_DIR"
+  # archinstall copies the live pacman.conf into the target, so keep the
+  # original for the installed system (restore_target_pacman_conf).
+  cp -- /etc/pacman.conf "$RUN_DIR/pacman.conf.live"
   [[ -f "$OFFLINE_REPO/core.db" ]] || { info "no offline repository; installing from the network"; return 0; }
   sed "s|@OFFLINE_REPO@|$OFFLINE_REPO|g" "$lib/pacman-offline.conf" >/etc/pacman.conf
   info "installing from the offline repository at $OFFLINE_REPO"
@@ -129,6 +133,7 @@ main() {
   run_archinstall
   boot_stack
   desktop_setup
+  restore_target_pacman_conf "$RUN_DIR/pacman.conf.live"
   configure_pyre_repo
   finish
 }

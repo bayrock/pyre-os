@@ -16,7 +16,7 @@ Last updated: 2026-11-10
 | `pyre-installer` 0.3.0: `pyre_repo`, `[pyre]` in `pacman.conf`, `KERNEL_CMDLINE +=`, home snapshot access, hardware rules, user reconcile | `test-e2e` passes from a network install, with the new lifecycle checks |
 | `build-pkgs` signs packages and the database with the dev key | done |
 | `tools/test-upgrade`: N-1 to N, then a broken update rolled back | passes from a network install (2026-11-10): `pyre update` to N runs both canary units, takes a home snapshot and a snap-pac pair, and a second reconcile is a no-op; after the broken N+1, the pre snapshot boots from Limine, `pyre rollback` restores it, and a normal boot reaches the desktop at N |
-| Final evidence: one ISO rebuild, then `test-e2e` and `test-upgrade` from it | needs the user (`sudo tools/build-iso`) |
+| Final evidence: `test-e2e`, `test-upgrade` and `test-iso` from a rebuilt ISO | ISO `pyreos-2026.11.13-x86_64.iso`: `test-e2e` passed (9 min 13 s) and `test-iso` passed on UEFI and BIOS. `test-upgrade` found the offline `pacman.conf` bug below. With the fix, an offline install from this ISO (newest installer over HTTP, network down) passes every `test-upgrade` stage. One more ISO build carries the fix |
 | Testing channel hosting | needs the user: the GitHub repo is private |
 
 **Found and fixed while testing:**
@@ -24,6 +24,7 @@ Last updated: 2026-11-10
 - The live medium's `[pyre]` section reached the target's `pacman.conf`. The offline ISO's points at `/opt/pyre-offline`, which would break `pacman -Syu`. The installer now drops any inherited `[pyre]` section first.
 - A snapshot boots under an overlay, so `/` shows `overlay`. `pyre rollback` now reads the snapshot number from the kernel command line.
 - `pyre doctor` checks each Limine entry's kernel and initramfs against the hashes in `limine.conf`, not `/boot/vmlinuz-*`.
+- **Offline installs could never update.** archinstall copies the live `/etc/pacman.conf` into the target (`PacmanConfig.persist`, archinstall 4.5), and for an offline install that is the config pointing `[core]` and `[extra]` at the ISO's `/opt/pyre-offline`. Every `pacman -Syu` on such a system failed. The P2 and P3 tests never synced from an installed system, so they missed it, and `test-upgrade` caught it on the first ISO run. `pyre-install` now saves the live medium's original `pacman.conf` and restores it into the target, and dies if the target still names the offline repository. `test-e2e` checks it too.
 - CI's `check` job failed on every push from the P3 commit on: the bare `archlinux:latest` container lacks `diffutils`, so the tests' `cmp` calls failed. The workflow now installs it, and `pyre-cli` depends on it, because its user unit uses `cmp` too. CI job logs need a token even on a public repo, so the cause was found by reproducing the container's package set.
 - The ISO build failed once the dev key signed `[pyre]`, because the build host's keyring does not know that key. The build-time `file://` repository is now `SigLevel = Never`; the live and installed systems still verify with `pyre-keyring`.
 - Test harness: probe output now bypasses the terminal, so pacman prints no color codes. A hard kill loses unflushed writes, so tests never rely on files written just before one.

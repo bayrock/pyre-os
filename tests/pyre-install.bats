@@ -250,3 +250,20 @@ EOF
   ! grep -q 'Optional TrustAll' "$TARGET/etc/pacman.conf"
   [ "$(grep '^\[' "$TARGET/etc/pacman.conf" | tail -n 1)" = "[pyre]" ]
 }
+
+@test "restore_target_pacman_conf replaces the offline config archinstall copied, and refuses a bad one" {
+  # shellcheck source=/dev/null
+  source "$lib/repo.sh"
+  TARGET="$BATS_TEST_TMPDIR/target"
+  mkdir -p "$TARGET/etc"
+  sed 's|@OFFLINE_REPO@|/opt/pyre-offline|g' "$lib/pacman-offline.conf" >"$TARGET/etc/pacman.conf"
+  printf '[options]\nSigLevel = Required DatabaseOptional\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[extra]\nInclude = /etc/pacman.d/mirrorlist\n' \
+    >"$BATS_TEST_TMPDIR/live.conf"
+  restore_target_pacman_conf "$BATS_TEST_TMPDIR/live.conf"
+  ! grep -q pyre-offline "$TARGET/etc/pacman.conf"
+  [ "$(grep -c '^Include = /etc/pacman.d/mirrorlist' "$TARGET/etc/pacman.conf")" -eq 2 ]
+
+  sed 's|@OFFLINE_REPO@|/opt/pyre-offline|g' "$lib/pacman-offline.conf" >"$BATS_TEST_TMPDIR/bad.conf"
+  run restore_target_pacman_conf "$BATS_TEST_TMPDIR/bad.conf"
+  [ "$status" -ne 0 ]
+}

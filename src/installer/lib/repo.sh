@@ -18,6 +18,22 @@ Include = /etc/pacman.d/pyre-mirrorlist
 EOF2
 }
 
+# restore_target_pacman_conf SAVED: give the installed system the live
+# medium's original pacman.conf. archinstall copies the live /etc/pacman.conf
+# into the target (PacmanConfig.persist in archinstall 4.5), and for an
+# offline install that file points [core] and [extra] at the ISO's
+# /opt/pyre-offline, which does not exist after install: every later
+# pacman -Syu would fail.
+restore_target_pacman_conf() {
+  local saved="$1" conf="$TARGET/etc/pacman.conf"
+  [[ -f "$saved" ]] || die "the live pacman.conf was not saved before the install"
+  install -m 644 -- "$saved" "$conf"
+  if grep -q 'pyre-offline' "$conf"; then
+    die "$conf still points at the live medium's offline repository"
+  fi
+  info "pacman.conf: Arch's repositories through /etc/pacman.d/mirrorlist"
+}
+
 # drop_pyre_section FILE: FILE without any [pyre] section. The live medium's
 # own [pyre] (the ISO's offline repository, or a development server) can reach
 # the target during the install, and must not stay there.

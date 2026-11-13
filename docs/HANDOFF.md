@@ -4,8 +4,8 @@
 
 Both P4 exit tests pass from network installs (STATUS).
 
-1. **Ask the user for one ISO rebuild** (`sudo tools/build-iso`). Its installer is 0.3.0, and its offline repository gains `pyre-cli` and the hardware packages.
-2. Run `tools/test-e2e` and `tools/test-upgrade` from the new ISO. The ISO's packages are release N-1, and `test-upgrade` builds N and N+1 from the tree. Run `tools/test-iso` too. Record the evidence and ask the user to accept P4.
+1. **Ask the user for one ISO rebuild** (`sudo tools/build-iso`). It carries the fix that restores the live `pacman.conf` into installed systems.
+2. Run `tools/test-e2e`, `tools/test-upgrade` and `tools/test-iso` from it. Record the evidence and ask the user to accept P4.
 3. **Hosting is decided:** the repository goes public (user, 2026-11-12), and the testing channel will be a GitHub Release on it. It needs:
    - the user to make the repository public in GitHub settings
    - a release signing key with a CI-held subkey, which the user creates and stores as an Actions secret (ADR 0009)
