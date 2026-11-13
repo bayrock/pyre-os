@@ -4,7 +4,19 @@ Last updated: 2026-11-10
 
 ## Current phase
 
-**P4: Lifecycle.** Started on 2026-11-10.
+**P4: Lifecycle.** The exit runs passed on 2026-11-13. Acceptance waits for the user.
+
+**P4 exit evidence** (ISO `pyreos-2026.11.13-x86_64.iso`, sha256 `28851945…3d34a813`, offline repository of 633 packages / 2.0 GB):
+
+- **`tools/test-upgrade`: all stages, 50 checks, in 10 min 18 s.** It installed release N-1 offline from the ISO. `pyre update` then took it to release N, built from the tree with `pkgrel+1` and a canary unit per scope:
+  - **On N:** both canaries ran, the home snapshot and a snap-pac pair were taken, a second `pyre reconcile --system` was a no-op, and `pyre doctor` reported no failures.
+  - **Desktop:** after a reboot the greeter and session came up, and the login reconcile service succeeded.
+  - **Broken update:** `pyre update` to N+1 made the greeter fail to render.
+  - **Recovery:** the pre-update snapshot booted from Limine with a working greeter, and `pyre rollback` restored it.
+  - **Back on N:** a normal boot reached the desktop at release N, and `pyre doctor` was clean.
+- **`tools/test-e2e`: all stages, 84 checks, in 9 min 17 s.** This adds the P4 lifecycle checks: reconcile versions, home snapshot access, `KERNEL_CMDLINE +=`, a single strict `[pyre]` section, `[core]` resolving to an https mirror, and `pyre doctor`.
+- **`tools/test-iso`:** passed on UEFI (40 s) and BIOS (36 s).
+- **Unit tests:** every reconcile unit has a bats test that runs it twice (`tests/reconcile-units.bats`), as do the engine, `doctor`, `hw` and bundles. CI is green.
 
 | Step | State |
 |---|---|
@@ -16,7 +28,7 @@ Last updated: 2026-11-10
 | `pyre-installer` 0.3.0: `pyre_repo`, `[pyre]` in `pacman.conf`, `KERNEL_CMDLINE +=`, home snapshot access, hardware rules, user reconcile | `test-e2e` passes from a network install, with the new lifecycle checks |
 | `build-pkgs` signs packages and the database with the dev key | done |
 | `tools/test-upgrade`: N-1 to N, then a broken update rolled back | passes from a network install (2026-11-10): `pyre update` to N runs both canary units, takes a home snapshot and a snap-pac pair, and a second reconcile is a no-op; after the broken N+1, the pre snapshot boots from Limine, `pyre rollback` restores it, and a normal boot reaches the desktop at N |
-| Final evidence: `test-e2e`, `test-upgrade` and `test-iso` from a rebuilt ISO | ISO `pyreos-2026.11.13-x86_64.iso`: `test-e2e` passed (9 min 13 s) and `test-iso` passed on UEFI and BIOS. `test-upgrade` found the offline `pacman.conf` bug below. With the fix, an offline install from this ISO (newest installer over HTTP, network down) passes every `test-upgrade` stage. One more ISO build carries the fix |
+| Final evidence from a rebuilt ISO | done 2026-11-13 (above); the first rebuild's `test-upgrade` found the offline `pacman.conf` bug below |
 | Testing channel hosting | needs the user: the GitHub repo is private |
 
 **Found and fixed while testing:**

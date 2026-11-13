@@ -1,11 +1,11 @@
 # Handoff
 
-## Next task: P4 final evidence and the hosting decision
+## Next task: P4 sign-off, then the testing channel and P5
 
-Both P4 exit tests pass from network installs (STATUS).
+The P4 exit runs passed on 2026-11-13 (STATUS has the evidence).
 
-1. **Ask the user for one ISO rebuild** (`sudo tools/build-iso`). It carries the fix that restores the live `pacman.conf` into installed systems.
-2. Run `tools/test-e2e`, `tools/test-upgrade` and `tools/test-iso` from it. Record the evidence and ask the user to accept P4.
+1. Get the user's sign-off on P4, then mark it accepted in ROADMAP and STATUS: keep the evidence in a few lines and drop the progress table.
+2. Not covered by the VM: real NVIDIA, AMD and Intel GPUs for `pyre hw` (P6 hardware), and the `-gaming` and `-lazyvim` bundles.
 3. **Hosting is decided:** the repository goes public (user, 2026-11-12), and the testing channel will be a GitHub Release on it. It needs:
    - the user to make the repository public in GitHub settings
    - a release signing key with a CI-held subkey, which the user creates and stores as an Actions secret (ADR 0009)
