@@ -124,5 +124,5 @@ Last updated: 2026-11-13
 
 Each question is listed under the phase that resolves it.
 
-- **Testing channel:** the user creates the release key and its CI signing subkey (ADR 0009).
+- **Testing channel:** the release key exists (`docs/reference/release-key.md`). The next step is the user filling the CI secret with `tools/release-key-ci`.
 - **P7:** whether the "PyreOS" trademark and domains are available.

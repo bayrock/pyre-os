@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# Export the PyreOS release signing subkey for CI (ADR 0009, docs/reference/release-key.md).
+# Run it by hand on whichever machine holds the offline release keyring, usually a
+# mounted backup drive. It copies only the signing subkey into a throwaway keyring,
+# removes the passphrase there, and proves the copy signs and verifies. The armored
+# subkey then goes to the clipboard, or to --out FILE, for the PYRE_SIGNING_SUBKEY
+# Actions secret. It also refreshes build/keys/pyre-release.asc, the public key.
+# The primary key never leaves KEY_HOME, and nothing secret is printed.
+# Usage: tools/release-key-ci [--out FILE] [KEY_HOME]   (default KEY_HOME: ~/pyre-release-key)
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+die() { printf 'release-key-ci: %s\n' "$*" >&2; exit 1; }
+say() { printf '%s\n' "$*" >&2; }
+
+out=''
+while (( $# )); do
+  case "$1" in
+    --out) out="${2:?--out needs a file}"; shift 2 ;;
+    -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*) die "unknown option: $1" ;;
+    *) break ;;
+  esac
+done
+key_home="${1:-$HOME/pyre-release-key}"
+(( $# <= 1 )) || die "too many arguments"
+[[ -d "$key_home" ]] || die "no keyring at $key_home (mount the offline drive and pass its keyring directory)"
+key_home="$(cd -- "$key_home" && pwd -P)"
+for cmd in gpg gpg-connect-agent gpgconf; do
+  command -v "$cmd" >/dev/null || die "missing $cmd"
+done
+if [[ -z "$out" ]] && ! command -v wl-copy >/dev/null; then
+  die "wl-copy not found; use --out FILE"
+fi
+
+work="$(mktemp -d -p "${XDG_RUNTIME_DIR:-/tmp}" pyre-release-key.XXXXXX)"
+cleanup() {
+  local home
+  for home in "$work/ci" "$work/check" "$work/verify" "$key_home"; do
+    [[ -d "$home" ]] && GNUPGHOME="$home" gpgconf --kill gpg-agent 2>/dev/null || true
+  done
+  rm -rf -- "$work"
+}
+trap cleanup EXIT
+mkdir -m 700 -- "$work/ci" "$work/check" "$work/verify"
+
+# The primary key, and the newest signing subkey that is not expired, revoked or disabled.
+listing="$(GNUPGHOME="$key_home" gpg --batch --with-colons --list-secret-keys)"
+(( $(grep -c '^sec:' <<<"$listing") == 1 )) || die "expected exactly one secret primary key in $key_home"
+primary="$(awk -F: '$1=="sec"{s=1; next} s && $1=="fpr"{print $10; exit}' <<<"$listing")"
+grep -q '^sec:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:#' <<<"$listing" &&
+  die "$key_home holds only a stub of the primary key; point at the offline keyring"
+read -r sub sub_expires < <(awk -F: '
+  $1=="ssb" { ok = ($2 !~ /[erd]/ && $12 ~ /s/); x = $7; next }
+  ok && $1=="fpr" { f = $10; e = x; ok = 0 }
+  END { print f, (e == "" ? "never" : e) }' <<<"$listing") || true
+[[ -n "$sub" && "$sub" != never ]] || die "no usable signing subkey in $key_home (add one: see docs/reference/release-key.md)"
+
+if [[ -t 0 ]]; then
+  read -rsp 'Release key passphrase: ' pass; printf '\n' >&2
+else
+  IFS= read -r pass || true
+fi
+printf '%s' "$pass" > "$work/pass"
+unset pass
+
+loop=(--batch --pinentry-mode loopback)
+say "copying signing subkey $sub ..."
+GNUPGHOME="$key_home" gpg "${loop[@]}" --passphrase-file "$work/pass" --armor \
+  --export-secret-subkeys "$sub!" > "$work/protected.asc" 2>"$work/log" ||
+  die "export failed (wrong passphrase?)"
+GNUPGHOME="$work/ci" gpg "${loop[@]}" --passphrase-file "$work/pass" \
+  --import "$work/protected.asc" 2>"$work/log" || die "import into the scratch keyring failed"
+
+# gpg --passwd stops at the missing primary, so ask the agent directly. An empty
+# NEW_PASSPHRASE stores the subkey unprotected, in the scratch keyring only.
+grip="$(GNUPGHOME="$work/ci" gpg --batch --with-colons --list-secret-keys "$sub!" |
+  awk -F: '$1=="ssb"{s=1} s && $1=="grp"{print $10; exit}')"
+: > "$work/empty"
+reply="$(GNUPGHOME="$work/ci" gpg-connect-agent "OPTION pinentry-mode=loopback" \
+  "/definqfile PASSPHRASE $work/pass" "/definqfile NEW_PASSPHRASE $work/empty" \
+  "PASSWD $grip" /bye 2>&1)"
+[[ "$(tail -n1 <<<"$reply")" == OK ]] || die "could not remove the passphrase from the CI copy"
+rm -f -- "$work/pass"
+GNUPGHOME="$work/ci" gpg --batch --armor --export-secret-subkeys "$sub!" > "$work/subkey.asc" 2>"$work/log"
+
+# Check the export the way CI will see it: a fresh keyring, the primary only a stub,
+# one subkey, and it signs with no passphrase.
+GNUPGHOME="$work/check" gpg --batch --import "$work/subkey.asc" 2>"$work/log" || die "the export does not import"
+check="$(GNUPGHOME="$work/check" gpg --batch --with-colons --list-secret-keys)"
+[[ "$(awk -F: '$1=="sec"{print $15}' <<<"$check")" == '#' ]] || die "the export contains the primary secret key"
+(( $(grep -c '^ssb:' <<<"$check") == 1 )) || die "the export should hold exactly one subkey"
+printf 'pyre release key check\n' > "$work/probe"
+GNUPGHOME="$work/check" gpg --batch --pinentry-mode loopback --passphrase '' \
+  -u "$sub!" --detach-sign -o "$work/probe.sig" "$work/probe" 2>"$work/log" ||
+  die "the export still needs a passphrase to sign"
+
+# Verify the probe with the public key alone, as pacman will.
+mkdir -p -- "$repo_root/build/keys"
+pub="$repo_root/build/keys/pyre-release.asc"
+GNUPGHOME="$key_home" gpg --batch --armor --export --export-options export-minimal "$primary" > "$pub"
+GNUPGHOME="$work/verify" gpg --batch --import "$pub" 2>"$work/log"
+GNUPGHOME="$work/verify" gpg --batch --status-fd 1 --verify "$work/probe.sig" "$work/probe" 2>/dev/null |
+  grep -q "VALIDSIG $sub .* $primary\$" || die "the public key does not verify the subkey's signature"
+
+expires=never
+[[ "$sub_expires" == never ]] || expires="$(date -u -d "@$sub_expires" +%F)"
+say ""
+say "primary   $primary"
+say "subkey    $sub (expires $expires)"
+say "public    $pub"
+say "CI copy   OK: subkey only, no passphrase, signs and verifies"
+
+if [[ -n "$out" ]]; then
+  install -m 600 -- "$work/subkey.asc" "$out"
+  say "secret    written to $out (delete it once the Actions secret is saved)"
+else
+  wl-copy < "$work/subkey.asc"
+  say ""
+  say "The subkey is on the clipboard. In GitHub: bayrock/pyre-os > Settings > Secrets and variables"
+  say "> Actions > New repository secret (or update the existing one). Name: PYRE_SIGNING_SUBKEY. Paste, save."
+  read -rp 'Press Enter once it is saved, to clear the clipboard... ' _ </dev/tty
+  wl-copy --clear
+  say "clipboard cleared (if you keep a clipboard history, delete that entry too)"
+fi
