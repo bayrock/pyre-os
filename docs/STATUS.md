@@ -8,7 +8,7 @@ Last updated: 2026-11-13
 
 **Carried over** (later phases unless reprioritized):
 
-- **Website (P5, started early):** the landing page lives in `landing/`, and the `pages` workflow publishes it to <https://bayrock.github.io/pyre-os/> once Pages is set to GitHub Actions. It was checked locally at 360, 768 and 1280 px in headless Chromium.
+- **Website (P5, started early):** the landing page lives in `landing/`, and the `pages` workflow publishes it to <https://bayrock.github.io/pyre-os/>. It went live on 2026-11-13 and serves `landing/site/` byte for byte. It was checked locally at 360, 768 and 1280 px in headless Chromium.
 - **Untested paths:** the interactive gum TUI (only `--config` has run), and real hardware (only QEMU with OVMF), including Bluetooth adapters (P6).
 - **Not built yet:** the hibernation swapfile option; Windows chainload detection (`FIND_BOOTLOADERS=yes` untested); Plymouth theming (P5); `pyre hw apply` and `pyre reconcile --system` (P4).
 - **Repository:** the installed system has no `[pyre]` repository, so PyreOS packages do not update after install until P4 hosting, and `[pyre]` packages are unsigned until P4.
