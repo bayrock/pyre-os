@@ -18,6 +18,7 @@ PyreOS is a polished, keyboard-first Arch Linux desktop built on [Niri](https://
 - [Building and testing](docs/BUILDING.md): ISO build and the QEMU/KVM test loop
 - [Decisions](docs/decisions/): architecture decision records
 - [Reference](docs/reference/): the development machine
+- [Landing page](landing/README.md): the website at <https://bayrock.github.io/pyre-os/>
 
 ## Contributing
 

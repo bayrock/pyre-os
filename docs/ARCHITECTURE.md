@@ -219,6 +219,7 @@ iso/                       archiso profile (releng-derived)
 tests/                     bats unit tests, VM e2e scenarios
 tools/                     build-pkgs, build-iso, run-vm, test-e2e, publish-repo
 docs/                      brief, architecture, roadmap, status, handoff, decisions/, reference/
+landing/                   the website: site/ is published to GitHub Pages as-is
 ```
 
 Generated ISOs, packages, VM disks, keys, and secrets go only under the ignored `build/`.

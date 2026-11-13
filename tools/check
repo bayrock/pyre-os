@@ -77,6 +77,39 @@ print("\n".join(bad) if bad else "ok")
 sys.exit(1 if bad else 0)
 EOF
 
+step "landing page"
+python3 -I - <<'EOF' || fail "landing page"
+# The rules from landing/README.md: no script, nothing loaded from another
+# host, and every local file the pages refer to exists.
+import pathlib, re, sys
+site = pathlib.Path("landing/site")
+bad = []
+for page in sorted(site.glob("*.html")):
+    html = page.read_text()
+    if re.search(r"<script\b", html, re.I):
+        bad.append(f"{page}: has a <script>")
+    refs = []
+    for tag in re.findall(r"<(?:link|img|source|iframe|audio|video|object|embed)\b[^>]*>", html):
+        if 'rel="canonical"' not in tag:
+            refs += re.findall(r"\b(?:src|href)=\"([^\"]*)\"", tag)
+    refs += re.findall(r"<a\b[^>]*\bhref=\"(?!https?:|#)([^\"]*)\"", html)
+    for ref in set(refs):
+        if re.match(r"^(?:[a-z]+:)?//", ref, re.I):
+            bad.append(f"{page}: loads {ref} from another host")
+            continue
+        path = ref.removeprefix("/pyre-os/") if ref.startswith("/") else ref
+        if ref.startswith("/") and not ref.startswith("/pyre-os/"):
+            bad.append(f"{page}: {ref} is outside /pyre-os/")
+        elif not (site / path).is_file() and not (site / path / "index.html").is_file() and path not in ("", "."):
+            bad.append(f"{page}: {ref} does not exist")
+for css in site.glob("*.css"):
+    for ref in re.findall(r"url\(([^)#]*)\)", css.read_text()):
+        if ref and not (site / ref.strip("\"'")).is_file():
+            bad.append(f"{css}: url({ref}) does not exist")
+print("\n".join(bad) if bad else "ok")
+sys.exit(1 if bad else 0)
+EOF
+
 step "whitespace"
 git diff --check HEAD -- . ':!build' || fail "whitespace errors"
 

@@ -1,0 +1,181 @@
+/* PyreOS landing page. Dark only.
+   The fire ramp is the mark's own gradient (pyre-e.svg). Every surface
+   is the mark's orange, #D9803C (oklch hue 58), at low chroma and low
+   lightness, so the night, the trees and the cabin are all one colour. */
+:root {
+  --coral: #e96d51;
+  --orange: #d9803c;
+  --gold: #e9b851;
+  --brick: #a63220;
+  --cream: #fdfceb;
+
+  --sky: oklch(0.17 0.012 58);
+  --bg: oklch(0.205 0.014 58);
+  --surface-far: oklch(0.235 0.018 58);
+  --surface-near: oklch(0.3 0.03 58);
+  --cabin: oklch(0.36 0.048 52);
+  --roof: oklch(0.265 0.03 48);
+  --muted: oklch(0.76 0.035 70);
+  color-scheme: dark;
+}
+
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(fonts/Fraunces.woff2) format("woff2");
+}
+
+/* Roughly metric-matched stand-in for the swap, so the page doesn't jump. */
+@font-face {
+  font-family: "Fraunces Fallback";
+  src: local("Georgia"), local("DejaVu Serif"), local("Noto Serif"), local("Liberation Serif");
+  size-adjust: 96%;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+
+html {
+  font-family: "Fraunces", "Fraunces Fallback", Georgia, serif;
+  font-variation-settings: "SOFT" 100;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The night: a darker sky at the top, a few static stars, and a little
+   warm light rising from behind the trees. */
+body {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  color: var(--cream);
+  text-align: center;
+  background:
+    radial-gradient(1.5px 1.5px at 12% 14%, oklch(0.9 0.03 80 / 0.7), transparent),
+    radial-gradient(1px 1px at 27% 31%, oklch(0.9 0.03 80 / 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 44% 8%, oklch(0.9 0.03 80 / 0.6), transparent),
+    radial-gradient(1px 1px at 63% 22%, oklch(0.9 0.03 80 / 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 81% 11%, oklch(0.9 0.03 80 / 0.7), transparent),
+    radial-gradient(1px 1px at 91% 36%, oklch(0.9 0.03 80 / 0.4), transparent),
+    radial-gradient(1px 1px at 6% 42%, oklch(0.9 0.03 80 / 0.4), transparent),
+    radial-gradient(60% 45% at 57% 100%, color-mix(in oklch, var(--orange) 14%, transparent), transparent),
+    linear-gradient(var(--sky), var(--bg));
+  background-attachment: fixed;
+}
+
+::selection { background: var(--orange); color: var(--sky); }
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12vh 16px 4vh;
+}
+
+/* The wordmark: "Pyr", the mark as its "e", then "OS". */
+h1 {
+  font-size: clamp(3.75rem, 16vw, 7.5rem);
+  font-weight: 650;
+  font-variation-settings: "SOFT" 100, "opsz" 144;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+h1 .e {
+  display: inline-block;
+  height: 0.88em;
+  width: auto;
+  margin: 0 0.035em 0 0.025em;
+  vertical-align: -0.19em;
+}
+
+.line {
+  margin-top: 1.25rem;
+  text-wrap: balance;
+  font-size: clamp(1.25rem, 3.6vw, 1.625rem);
+  font-variation-settings: "SOFT" 100, "opsz" 24;
+}
+
+/* The mockup's long button: dark text on the fire gradient. */
+.pill {
+  display: inline-block;
+  margin-top: 2.25rem;
+  padding: 0.6em 1.5em 0.65em;
+  border-radius: 999px;
+  background: linear-gradient(100deg, var(--orange), var(--gold));
+  color: var(--sky);
+  font-size: 1.125rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 0 2.5rem color-mix(in oklch, var(--orange) 25%, transparent);
+  transition: box-shadow 0.2s, filter 0.2s;
+}
+
+.pill:hover { filter: brightness(1.08); box-shadow: 0 0 3rem color-mix(in oklch, var(--gold) 40%, transparent); }
+
+.status { margin-top: 1rem; font-size: 1rem; color: var(--muted); text-wrap: balance; }
+
+a:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 999px; }
+
+/* The cabin in the woods. The SVG is cropped from the sides on narrow
+   screens and always keeps the cabin, just right of centre. */
+.woods { display: block; width: 100%; height: clamp(170px, 34vh, 340px); }
+.far { fill: var(--surface-far); }
+.near { fill: var(--surface-near); }
+.cabin { fill: var(--cabin); }
+.roof { fill: var(--roof); }
+.window { fill: var(--gold); }
+
+/* Embers leave the chimney once on load and then rest (WCAG 2.2.2). */
+.ember {
+  fill: var(--gold);
+  opacity: 0;
+  transform-box: fill-box;
+  animation: rise 3.2s ease-out 1 both;
+}
+.ember:nth-of-type(2) { fill: var(--orange); animation-delay: 0.7s; --dx: -14px; }
+.ember:nth-of-type(3) { fill: var(--coral); animation-delay: 1.3s; --dx: 10px; }
+.ember:nth-of-type(4) { animation-delay: 1.9s; --dx: -6px; }
+.ember:nth-of-type(5) { fill: var(--orange); animation-delay: 2.4s; --dx: 16px; }
+
+@keyframes rise {
+  0% { opacity: 0; transform: translate(0, 0); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx, 8px), -150px) scale(0.5); }
+}
+
+footer {
+  padding: 0 16px 1.5rem;
+  background: var(--surface-near);
+  color: var(--muted);
+  font-size: 0.9375rem;
+  text-wrap: balance;
+}
+
+footer a { color: inherit; text-underline-offset: 0.2em; }
+footer a:hover { color: var(--gold); }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 16px; top: 16px; padding: 0.5rem 1rem; border-radius: 999px; background: var(--gold); color: var(--sky); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ember { animation: none; }
+  .pill { transition: none; }
+}
+
+@media (forced-colors: active) {
+  .pill { border: 2px solid LinkText; }
+}

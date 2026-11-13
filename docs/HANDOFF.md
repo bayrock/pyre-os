@@ -8,6 +8,7 @@
    - `pyre-keyring` then trusts the release key alongside the dev key; release images will drop the dev key in P7
 2. **CI publishing:** on pushes to `main`, build every package, sign it and the database with the subkey, and upload them to a GitHub Release named `testing`. Then `pyre-release`'s mirrorlist points at `https://github.com/bayrock/pyre-os/releases/download/testing`. Verify a VM can `pyre update` from it.
 3. **P5 (ROADMAP):** `palette.toml`, matugen templates, `pyre theme`, the "Ember" theme, and branding (Limine, Plymouth, the greeter, wallpapers, and the boot splash, which is still Arch artwork).
+4. **Landing page:** the user sets **Settings → Pages → Source: GitHub Actions** once. Then re-run the `pages` workflow, and check that <https://bayrock.github.io/pyre-os/> serves `landing/site/`. When a testing release exists, add the "Install" pill (`landing/README.md`).
 
 ## Dev loop reference
 
