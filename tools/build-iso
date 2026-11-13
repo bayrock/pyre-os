@@ -88,6 +88,11 @@ build_offline_repo() {
   local entry repo file
   mapfile -t wanted < <(grep -Ev '^[[:space:]]*(#|$)' "$profile_dir/offline.x86_64")
   mkdir -p -- "$offline_db" "$offline_cache" "$offline_dest"
+  # Local packages are often rebuilt at the same version during development, so
+  # a cached copy can differ from the one build/repo now lists. Fetch them anew.
+  for file in "$repo_dir"/*.pkg.tar.zst; do
+    rm -f -- "$offline_cache/${file##*/}" "$offline_cache/${file##*/}.sig"
+  done
   run_logged pacman --config "$pacman_conf" --dbpath "$offline_db" --cachedir "$offline_cache" \
     -Syw --noconfirm "${wanted[@]}" || return
   mapfile -t entries < <(pacman --config "$pacman_conf" --dbpath "$offline_db" \
