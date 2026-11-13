@@ -1,0 +1,24 @@
+# Maintainer: PyreOS contributors
+# A PyreOS bundle (ARCHITECTURE.md, Default applications): a meta-package
+# that pyre install dev adds and pyre remove dev takes away again.
+pkgname=pyre-bundle-dev
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='PyreOS bundle: development tools'
+arch=(any)
+url='https://github.com/bayrock/pyre-os'
+license=(MIT)
+depends=(
+  base-devel
+  git
+  github-cli
+  lazygit
+  just
+  jq
+  go
+  nodejs
+  npm
+  python
+  uv
+  rustup
+)

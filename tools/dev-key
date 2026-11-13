@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Create (once) the PyreOS *development* signing key under build/keys/ and export
+# its public half into packages/pyre-keyring/. The private key never leaves build/.
+# Release images never trust this key (ADR 0009).
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+export GNUPGHOME="$repo_root/build/keys/gnupg"
+keyring_dir="$repo_root/packages/pyre-keyring"
+uid='PyreOS Development Key (NOT FOR RELEASE) <dev@pyreos.invalid>'
+
+mkdir -p -- "$GNUPGHOME"
+chmod 700 -- "$GNUPGHOME"
+
+if ! gpg --batch --list-secret-keys -- "$uid" >/dev/null 2>&1; then
+  gpg --batch --quiet --passphrase '' --quick-generate-key "$uid" ed25519 sign 2y
+fi
+
+fpr="$(gpg --batch --with-colons --list-secret-keys -- "$uid" | awk -F: '$1 == "fpr" { print $10; exit }')"
+[[ -n "$fpr" ]] || { echo "dev-key: could not read fingerprint" >&2; exit 1; }
+
+gpg --batch --armor --export -- "$fpr" > "$keyring_dir/pyre.gpg"
+printf '%s:4:\n' "$fpr" > "$keyring_dir/pyre-trusted"
+: > "$keyring_dir/pyre-revoked"
+printf '%s\n' "$fpr"

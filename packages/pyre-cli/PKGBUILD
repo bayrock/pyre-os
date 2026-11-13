@@ -1,0 +1,28 @@
+# Maintainer: PyreOS contributors
+# The pyre lifecycle tool, reconcile units and hardware rules (ADR 0007,
+# ADR 0014). The sources are in src/cli/, src/hw/ and system/ of this
+# repository, so the package is built in place.
+pkgname=pyre-cli
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='PyreOS lifecycle tool: update, snapshot, rollback, doctor, reconcile, hardware rules'
+arch=(any)
+url='https://github.com/bayrock/pyre-os'
+license=(MIT)
+depends=(bash coreutils diffutils snapper sudo util-linux)
+optdepends=('libnotify: notifications about .pyre-new files')
+
+package() {
+  local root="$startdir/../.." dir
+  install -Dm755 "$root/src/cli/pyre" "$pkgdir/usr/bin/pyre"
+  for dir in lib commands reconcile/system reconcile/user; do
+    install -d "$pkgdir/usr/lib/pyre/$dir"
+    find "$root/src/cli/$dir" -maxdepth 1 -type f -exec install -m644 -t "$pkgdir/usr/lib/pyre/$dir" {} +
+  done
+  (cd "$root/src/hw" && find rules files -type f -exec install -Dm644 {} "$pkgdir/usr/share/pyre/hw/{}" \;)
+  install -Dm644 "$root/system/alpm/pyre-reconcile.hook" "$pkgdir/usr/share/libalpm/hooks/pyre-reconcile.hook"
+  install -Dm644 "$root/system/systemd-user/pyre-reconcile.service" \
+    "$pkgdir/usr/lib/systemd/user/pyre-reconcile.service"
+  install -d "$pkgdir/usr/lib/systemd/user/default.target.wants"
+  ln -s ../pyre-reconcile.service "$pkgdir/usr/lib/systemd/user/default.target.wants/pyre-reconcile.service"
+}

@@ -1,0 +1,17 @@
+# shellcheck shell=bash
+# help: add a bundle of apps (pyre install dev, media, office)
+# usage: pyre install [BUNDLE...]
+#   (no bundle)   list the bundles and which are installed
+
+# shellcheck source=src/cli/lib/bundles.sh
+source "$PYRE_LIB/lib/bundles.sh"
+
+cmd_install() {
+  local name pkgs=()
+  case "${1:-}" in
+    -h | --help) command_usage "${BASH_SOURCE[0]}"; return 0 ;;
+    "") step "Bundles"; bundle_list; return 0 ;;
+  esac
+  for name in "$@"; do bundle_check "$name"; pkgs+=("pyre-bundle-$name"); done
+  as_root pacman -S --needed "${pkgs[@]}"
+}

@@ -1,0 +1,5 @@
+# Intel GPUs: Mesa drives them; Vulkan needs ANV, and VA-API needs the
+# media driver (Broadwell and newer).
+match_pci_vendor = 8086
+match_pci_class = 0300 0380
+packages = vulkan-intel intel-media-driver

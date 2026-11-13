@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+profile_dir="$repo_root/iso"
+
+die() {
+  printf 'check-profile: %s\n' "$*" >&2
+  exit 1
+}
+
+required=(
+  profiledef.sh
+  packages.x86_64
+  pacman.conf
+  airootfs/etc/mkinitcpio.conf.d/archiso.conf
+  efiboot/loader/loader.conf
+  efiboot/loader/entries/01-archiso-linux.conf
+  grub/grub.cfg
+  grub/loopback.cfg
+  syslinux/syslinux.cfg
+  syslinux/archiso_sys-linux.cfg
+  UPSTREAM.md
+  offline.x86_64
+)
+
+for relative in "${required[@]}"; do
+  [[ -f "$profile_dir/$relative" ]] || die "missing required profile file: $relative"
+done
+
+bash -n "$profile_dir/profiledef.sh" || die "profiledef.sh has a Bash syntax error"
+
+# Headless tests read the serial log, so every boot path must carry the
+# serial console through %KERNEL_PARAMS% (see iso/UPSTREAM.md).
+grep -q '^kernel_params_x86_64=".*console=ttyS0,115200' "$profile_dir/profiledef.sh" \
+  || die "profiledef.sh must set console=ttyS0,115200 in kernel_params_x86_64"
+while IFS= read -r cfg; do
+  grep -q '%KERNEL_PARAMS%' "$cfg" || die "boot config lacks %KERNEL_PARAMS%: ${cfg#"$profile_dir"/}"
+done < <(grep -rlE '^[[:space:]]*(options|APPEND archisobasedir|linux /%INSTALL_DIR%)' \
+           "$profile_dir/efiboot" "$profile_dir/grub" "$profile_dir/syslinux")
+
+# The [pyre] repository must come after every Arch repository (ADR 0009).
+last_repo="$(grep -E '^\[[^]]+\]' "$profile_dir/pacman.conf" | grep -v '^\[options\]' | tail -n 1)"
+[[ "$last_repo" == "[pyre]" ]] || die "pacman.conf: [pyre] must be the last repository (found $last_repo)"
+grep -q '^Server = file://@PYRE_REPO_DIR@$' "$profile_dir/pacman.conf" \
+  || die "pacman.conf: [pyre] must use Server = file://@PYRE_REPO_DIR@ (filled in by tools/build-iso)"
+
+declare -A seen=()
+while IFS= read -r line || [[ -n "$line" ]]; do
+  line="${line%%#*}"
+  line="${line//[[:space:]]/}"
+  [[ -z "$line" ]] && continue
+  [[ "$line" =~ ^[[:alnum:]@._+-]+$ ]] || die "invalid package entry: $line"
+  [[ -z "${seen[$line]+present}" ]] || die "duplicate package entry: $line"
+  seen[$line]=1
+done < "$profile_dir/packages.x86_64"
+
+for required_package in mkinitcpio mkinitcpio-archiso pyre-base pyre-installer; do
+  [[ -n "${seen[$required_package]+present}" ]] || die "required archiso package missing: $required_package"
+done
+
+printf 'Profile structure and package list are valid (%d packages).\n' "${#seen[@]}"

@@ -1,0 +1,17 @@
+# Maintainer: PyreOS contributors
+# A PyreOS bundle (ARCHITECTURE.md, Default applications): a meta-package
+# that pyre install media adds and pyre remove media takes away again.
+pkgname=pyre-bundle-media
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='PyreOS bundle: media creation'
+arch=(any)
+url='https://github.com/bayrock/pyre-os'
+license=(MIT)
+depends=(
+  audacity
+  gimp
+  inkscape
+  kdenlive
+  obs-studio
+)

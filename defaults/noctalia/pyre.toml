@@ -1,0 +1,25 @@
+# PyreOS defaults for Noctalia (ADR 0013). Package-owned: do not edit.
+# ~/.config/noctalia/config.toml includes this file; its own keys win, and
+# changes made in Noctalia's settings window win over both.
+
+[shell]
+# Noctalia is the session's polkit agent; no separate agent is installed.
+polkit_agent = true
+telemetry_enabled = false
+# PyreOS presets the theme, so Noctalia's first-run wizard is not shown.
+setup_wizard_enabled = false
+
+[theme]
+mode = "dark"
+
+# Lock after 10 minutes idle and turn the screens off a minute later.
+# Noctalia locks before suspend by default.
+[idle.behavior.lock]
+timeout = 600
+action = "lock"
+enabled = true
+
+[idle.behavior.screen-off]
+timeout = 660
+action = "screen_off"
+enabled = true

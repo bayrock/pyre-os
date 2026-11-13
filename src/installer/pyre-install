@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# Install PyreOS from the live medium: archinstall does the disks and the base
+# system, then pyre-install sets up the boot stack and the desktop session
+# (ADR 0006, ADR 0011, ADR 0013).
+# Usage: pyre-install                  interactive (gum)
+#        pyre-install --config FILE    unattended; FILE must set erase_disk = true
+#        pyre-install --print-config FILE   show the archinstall JSON, change nothing
+set -euo pipefail
+
+here="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
+lib="${PYRE_INSTALLER_LIB:-/usr/lib/pyre/installer}"
+[[ -f "$here/lib/common.sh" ]] && lib="$here/lib"
+for part in common config archinstall boot desktop repo tui; do
+  # shellcheck source=/dev/null
+  source "$lib/$part.sh"
+done
+
+readonly OFFLINE_REPO=/opt/pyre-offline
+readonly RUN_DIR=/run/pyre-install
+
+usage() {
+  sed -n '2,7s/^# //p' "${BASH_SOURCE[0]}"
+}
+
+# The whole disk holding the live medium, never an install target.
+boot_medium_disk() {
+  local src
+  src="$(findmnt -no SOURCE /run/archiso/bootmnt 2>/dev/null)" || return 0
+  [[ -b "$src" ]] || return 0
+  lsblk -npo PKNAME "$src" | head -n 1 | grep . || printf '%s\n' "$src"
+}
+
+check_disk() {
+  local disk="${CFG[disk]}"
+  [[ -b "$disk" ]] || die "not a block device: $disk"
+  [[ "$(lsblk -dno TYPE "$disk")" == disk ]] || die "not a whole disk: $disk"
+  installable_disk "$disk" "$(boot_medium_disk)" || die "$disk is the live medium or not an install target"
+  if lsblk -nlo MOUNTPOINTS "$disk" | grep -q .; then
+    die "$disk has mounted filesystems; unmount them first"
+  fi
+  if [[ "$(swapon --noheadings --show=NAME)" == *"$disk"* ]]; then
+    die "$disk is in use as swap"
+  fi
+}
+
+# Use the ISO's offline repository when it exists (ADR 0006); otherwise keep
+# the live system's pacman.conf (network install, used in development).
+use_offline_repo() {
+  [[ -f "$OFFLINE_REPO/core.db" ]] || { info "no offline repository; installing from the network"; return 0; }
+  sed "s|@OFFLINE_REPO@|$OFFLINE_REPO|g" "$lib/pacman-offline.conf" >/etc/pacman.conf
+  info "installing from the offline repository at $OFFLINE_REPO"
+}
+
+wait_for_keyring() {
+  step "Preparing the package keyring"
+  timeout 300 systemctl start pacman-init.service ||
+    die "pacman-init.service did not finish within 5 minutes; see systemctl list-jobs"
+  systemctl is-active --quiet pacman-init.service || die "pacman-init.service failed; the keyring is not ready"
+}
+
+run_archinstall() {
+  local disk_bytes sector
+  disk_bytes="$(lsblk -bdno SIZE "${CFG[disk]}")"
+  sector="$(lsblk -dno LOG-SEC "${CFG[disk]}" | tr -d ' ')"
+  install -d -m 700 "$RUN_DIR"
+  archinstall_config "$disk_bytes" "$sector" "$(new_uuid)" "$(new_uuid)" >"$RUN_DIR/config.json"
+  (umask 077 && archinstall_creds >"$RUN_DIR/creds.json")
+
+  step "Running archinstall (disks, encryption, base system)"
+  archinstall --config "$RUN_DIR/config.json" --creds "$RUN_DIR/creds.json" \
+    --silent --skip-boot --skip-ntp --skip-wkd --skip-version-check --offline ||
+    die "archinstall failed; see /var/log/archinstall/install.log"
+  rm -f -- "$RUN_DIR/creds.json"
+  findmnt -n "$TARGET" >/dev/null && [[ -s "$TARGET/etc/fstab" ]] ||
+    die "archinstall finished without a mounted target and fstab"
+}
+
+finish() {
+  step "Finishing"
+  umount -R "$TARGET"
+  cryptsetup close root
+  printf '\nPyreOS is installed on %s.\n' "${CFG[disk]}"
+  case "${CFG[finish]}" in
+    reboot) systemctl reboot ;;
+    poweroff) systemctl poweroff ;;
+    *) printf 'Remove the installation medium and reboot when ready.\n' ;;
+  esac
+}
+
+main() {
+  local mode=interactive file=""
+  case "${1:-}" in
+    "") ;;
+    --config) mode=config; file="${2:?--config needs a file}" ;;
+    --print-config) mode=print; file="${2:?--print-config needs a file}" ;;
+    -h | --help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+
+  if [[ "$mode" == print ]]; then
+    config_load "$file"
+    config_check || exit 1
+    archinstall_config "$(lsblk -bdno SIZE "${CFG[disk]}")" "$(lsblk -dno LOG-SEC "${CFG[disk]}" | tr -d ' ')" \
+      "$(new_uuid)" "$(new_uuid)"
+    exit 0
+  fi
+
+  [[ $EUID -eq 0 ]] || die "run as root on the live medium"
+  on_live_medium || die "not running on the PyreOS live medium; refusing to touch disks"
+  [[ -d /sys/firmware/efi ]] || die "PyreOS installs on UEFI systems only (ADR 0011); this machine booted with BIOS"
+
+  if [[ "$mode" == config ]]; then
+    config_load "$file"
+  else
+    tui_collect
+  fi
+  config_check || exit 1
+  config_check_system || exit 1
+  check_disk
+  if [[ "$mode" == config ]]; then
+    [[ "${CFG[erase_disk]}" == true ]] || die "$file must set erase_disk = true to erase ${CFG[disk]}"
+  else
+    tui_confirm
+  fi
+
+  trap 'rm -f -- "$RUN_DIR/creds.json"' EXIT
+  wait_for_keyring
+  use_offline_repo
+  run_archinstall
+  boot_stack
+  desktop_setup
+  configure_pyre_repo
+  finish
+}
+
+main "$@"

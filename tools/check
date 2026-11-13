@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Run every offline repository check. This is the default gate before each commit.
+# Usage: tools/check
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd -- "$repo_root"
+
+failed=0
+step() { printf '\n== %s\n' "$*"; }
+fail() { printf 'FAIL: %s\n' "$*" >&2; failed=1; }
+
+# Bash sources: tracked or new files whose shebang mentions bash, plus *.sh.
+mapfile -t bash_files < <(
+  git ls-files --cached --others --exclude-standard -- tools iso src packages tests 2>/dev/null |
+    while IFS= read -r f; do
+      [[ -f "$f" ]] || continue
+      if [[ "$f" == *.sh ]] || head -n1 -- "$f" 2>/dev/null | grep -qE '^#!.*\bbash\b|^# shellcheck shell=bash'; then
+        printf '%s\n' "$f"
+      fi
+    done
+)
+mapfile -t py_files < <(
+  git ls-files --cached --others --exclude-standard -- tools src tests 2>/dev/null |
+    while IFS= read -r f; do
+      [[ -f "$f" ]] || continue
+      if [[ "$f" == *.py ]] || head -n1 -- "$f" 2>/dev/null | grep -qE '^#!.*\bpython3?\b'; then
+        printf '%s\n' "$f"
+      fi
+    done
+)
+
+step "shellcheck (${#bash_files[@]} files)"
+if command -v shellcheck >/dev/null 2>&1; then
+  shellcheck -x "${bash_files[@]}" || fail shellcheck
+  # PKGBUILDs and install scripts are sourced by makepkg/pacman: makepkg sets
+  # pkgdir/srcdir (SC2154) and reads the metadata variables (SC2034).
+  mapfile -t pkg_files < <(git ls-files --cached --others --exclude-standard -- 'packages/*/PKGBUILD' 'packages/*/*.install')
+  if (( ${#pkg_files[@]} )); then
+    printf '(and %d PKGBUILD/install files)\n' "${#pkg_files[@]}"
+    shellcheck --shell=bash -e SC2034,SC2154 "${pkg_files[@]}" || fail "shellcheck (packages)"
+  fi
+else
+  fail "shellcheck not installed"
+fi
+
+step "python syntax (${#py_files[@]} files)"
+for f in "${py_files[@]}"; do
+  python3 -I -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f" || fail "python syntax: $f"
+done
+
+step "iso profile"
+tools/check-profile || fail check-profile
+
+if [[ -d tests ]] && find tests -name '*.bats' -print -quit | grep -q .; then
+  step "bats"
+  bats -r tests || fail bats
+fi
+
+step "markdown relative links"
+python3 -I - <<'EOF' || fail "markdown links"
+import pathlib, re, subprocess, sys
+files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.md"],
+                       capture_output=True, text=True, check=True).stdout.split()
+bad = []
+for name in files:
+    p = pathlib.Path(name)
+    if not p.is_file():
+        continue
+    for m in re.finditer(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", p.read_text()):
+        target = m.group(1)
+        if re.match(r"^[a-z]+:", target):
+            continue
+        if not (p.parent / target).exists():
+            bad.append(f"{p}: {target}")
+print("\n".join(bad) if bad else "ok")
+sys.exit(1 if bad else 0)
+EOF
+
+step "whitespace"
+git diff --check HEAD -- . ':!build' || fail "whitespace errors"
+
+echo
+if [[ "$failed" -ne 0 ]]; then
+  echo "tools/check: FAILED"
+  exit 1
+fi
+echo "tools/check: all checks passed"

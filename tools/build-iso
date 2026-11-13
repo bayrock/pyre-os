@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Build the PyreOS ISO from iso/ into build/out/. Run as root: sudo tools/build-iso
+# Every build starts from a clean work directory and a fresh copy of iso/ in
+# build/profile/, which gains the offline package repository (iso/offline.x86_64).
+# Packages come from PYRE_MIRROR (default: Arch's geo mirror), not the host's
+# mirrorlist. The full log goes to build/logs/; use --verbose to also stream it.
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+profile_dir="$repo_root/iso"
+build_root="$repo_root/build"
+work_dir="$build_root/work"
+out_dir="$build_root/out"
+log_dir="$build_root/logs"
+repo_dir="$build_root/repo"
+staged_dir="$build_root/profile"
+offline_db="$build_root/offline/db"
+offline_cache="$build_root/offline/cache"
+offline_dest="$staged_dir/airootfs/opt/pyre-offline"
+# shellcheck disable=SC2016 # $repo and $arch are pacman's, not the shell's.
+mirror="${PYRE_MIRROR:-https://geo.mirror.pkgbuild.com/\$repo/os/\$arch}"
+
+die() {
+  printf 'build-iso: %s\n' "$*" >&2
+  exit 1
+}
+
+verbose=0
+case "${1:-}" in
+  "") ;;
+  --verbose) verbose=1 ;;
+  -h|--help) sed -n '2,7s/^# //p' "${BASH_SOURCE[0]}"; exit 0 ;;
+  *) die "unknown argument: $1 (only --verbose is accepted)" ;;
+esac
+
+[[ $EUID -eq 0 ]] || die "mkarchiso needs root; run: sudo tools/build-iso"
+command -v mkarchiso >/dev/null 2>&1 || die "mkarchiso is unavailable; install archiso"
+
+for path in "$profile_dir" "$build_root" "$staged_dir"; do
+  resolved="$(realpath -m -- "$path")"
+  [[ "$resolved" == "$repo_root"/* ]] || die "path resolves outside repository: $path"
+done
+"$repo_root/tools/check-profile" >/dev/null || die "profile check failed; run tools/check-profile"
+[[ -f "$repo_dir/pyre.db" ]] || die "no local [pyre] repo at $repo_dir; run tools/build-pkgs (as your user) first"
+
+# Refuse to touch a work directory that still has mounts (an interrupted build).
+if [[ -e "$work_dir" ]]; then
+  [[ "$(realpath -- "$work_dir")" == "$build_root/work" ]] || die "work directory is not a plain directory"
+  mounts="$(findmnt -rn -o TARGET)"
+  if grep -q -- "^$work_dir\(/\|$\)" <<<"$mounts"; then
+    die "mounts remain under $work_dir; unmount them before rebuilding"
+  fi
+  printf 'Removing previous work directory %s\n' "$work_dir"
+  rm -rf --one-file-system -- "$work_dir"
+fi
+
+owner="${SUDO_UID:-0}:${SUDO_GID:-0}"
+# mkarchiso creates the work directory itself; -r only removes one it created.
+mkdir -p -- "$out_dir" "$log_dir"
+# The profile's pacman.conf names the local repo with a placeholder, so no
+# machine-specific path is committed. Arch repos use one explicit mirror.
+pacman_conf="$build_root/pacman.conf"
+sed -e "s|@PYRE_REPO_DIR@|$repo_dir|" \
+  -e "s|^Include = /etc/pacman.d/mirrorlist\$|Server = $mirror|" \
+  "$profile_dir/pacman.conf" > "$pacman_conf"
+if grep -q '^Include = /etc/pacman.d/mirrorlist' "$pacman_conf"; then
+  die "pacman.conf still uses the host mirrorlist"
+fi
+chown "$owner" "$out_dir" "$log_dir"
+log="$log_dir/build-iso-$(date +%Y%m%d-%H%M%S).log"
+: > "$log"
+chown "$owner" "$log"
+
+run_logged() {
+  if (( verbose )); then
+    "$@" 2>&1 | tee -a "$log"
+  else
+    "$@" >>"$log" 2>&1
+  fi
+}
+
+# Download the closure of iso/offline.x86_64 into a persistent cache, then put
+# exactly that set, plus the sync databases it was resolved against, in the
+# staged airootfs. Arch's databases no longer embed package signatures, so
+# every core/extra package needs its detached .sig next to it.
+build_offline_repo() {
+  local -a wanted entries keep=()
+  local entry repo file
+  mapfile -t wanted < <(grep -Ev '^[[:space:]]*(#|$)' "$profile_dir/offline.x86_64")
+  mkdir -p -- "$offline_db" "$offline_cache" "$offline_dest"
+  run_logged pacman --config "$pacman_conf" --dbpath "$offline_db" --cachedir "$offline_cache" \
+    -Syw --noconfirm "${wanted[@]}" || return
+  mapfile -t entries < <(pacman --config "$pacman_conf" --dbpath "$offline_db" \
+    -Sp --print-format '%r %f' "${wanted[@]}") || return
+  (( ${#entries[@]} )) || { echo "offline repo: no packages resolved" >&2; return 1; }
+  for entry in "${entries[@]}"; do
+    repo="${entry%% *}"
+    file="${entry#* }"
+    keep+=("$file")
+    cp -l -- "$offline_cache/$file" "$offline_dest/" 2>/dev/null || cp -- "$offline_cache/$file" "$offline_dest/"
+    if [[ -f "$offline_cache/$file.sig" ]]; then
+      cp -- "$offline_cache/$file.sig" "$offline_dest/"
+      keep+=("$file.sig")
+    elif [[ "$repo" != pyre ]]; then
+      echo "offline repo: no signature for $repo/$file" >&2
+      return 1
+    fi
+  done
+  for repo in core extra pyre; do
+    cp -- "$offline_db/sync/$repo.db" "$offline_dest/$repo.db"
+  done
+  # Keep the cache to the current set, so it does not grow without bound.
+  for file in "$offline_cache"/*; do
+    [[ -f "$file" ]] || continue
+    [[ " ${keep[*]} " == *" ${file##*/} "* ]] || rm -f -- "$file"
+  done
+  printf 'Offline repository: %d packages, %s\n' "${#entries[@]}" "$(du -sh -- "$offline_dest" | cut -f1)"
+}
+
+printf 'Profile: %s (staged in %s)\nMirror:  %s\nOutput:  %s\nLog:     %s\n' \
+  "$profile_dir" "$staged_dir" "$mirror" "$out_dir" "$log"
+start=$SECONDS
+rm -rf --one-file-system -- "$staged_dir"
+cp -a -- "$profile_dir" "$staged_dir"
+build_offline_repo || die "building the offline repository failed; see $log"
+
+status=0
+run_logged mkarchiso -v -r -C "$pacman_conf" -w "$work_dir" -o "$out_dir" "$staged_dir" || status=$?
+
+if (( status != 0 )); then
+  printf '\nbuild-iso: mkarchiso failed (exit %d). Last lines of %s:\n' "$status" "$log" >&2
+  tail -n 40 -- "$log" >&2
+  exit "$status"
+fi
+
+chown "$owner" "$out_dir"/*.iso
+# Let the user inspect and clean the staged profile and offline cache without sudo.
+chown -R "$owner" "$staged_dir" "$build_root/offline"
+iso="$(find "$out_dir" -maxdepth 1 -name '*.iso' -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
+printf '\nBuilt %s (%s) in %ds\n' "$iso" "$(du -h -- "$iso" | cut -f1)" "$((SECONDS - start))"

@@ -1,0 +1,77 @@
+# Maintainer: PyreOS contributors
+# The PyreOS desktop (ADR 0013): niri, Noctalia and its greeter, the session
+# services, the default apps, and the layered defaults. The defaults and user
+# stubs are in defaults/ and skel/ of this repository, so the package is built
+# in place.
+pkgname=pyre-desktop
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='PyreOS desktop: niri, Noctalia, session services, default apps and defaults'
+arch=(any)
+url='https://github.com/bayrock/pyre-os'
+license=(MIT)
+depends=(
+  pyre-base
+  # Session: compositor, shell, greeter, X11 apps, portals
+  niri
+  noctalia
+  noctalia-greeter
+  greetd
+  xwayland-satellite
+  xdg-desktop-portal-gnome
+  xdg-desktop-portal-gtk
+  gnome-keyring
+  # Audio, Bluetooth, power
+  pipewire
+  pipewire-alsa
+  pipewire-jack
+  pipewire-pulse
+  wireplumber
+  bluez
+  bluez-utils
+  power-profiles-daemon
+  # Default apps
+  foot
+  firefox
+  nautilus
+  neovim
+  gpu-screen-recorder
+  mpv
+  imv
+  papers
+  # CLI tools
+  bat
+  btop
+  eza
+  fastfetch
+  fzf
+  ripgrep
+  starship
+  zoxide
+  # Desktop plumbing and fonts
+  libnotify
+  wl-clipboard
+  xdg-user-dirs
+  xdg-utils
+  noto-fonts
+  noto-fonts-emoji
+  ttf-jetbrains-mono-nerd
+)
+backup=(
+  etc/skel/.config/foot/foot.ini
+  etc/skel/.config/niri/config.kdl
+  etc/skel/.config/noctalia/config.toml
+)
+
+package() {
+  local root="$startdir/../.."
+  local file
+  while IFS= read -r -d '' file; do
+    install -Dm644 "$root/defaults/$file" "$pkgdir/usr/share/pyre/defaults/$file"
+  done < <(cd "$root/defaults" && find . -type f -printf '%P\0')
+  while IFS= read -r -d '' file; do
+    install -Dm644 "$root/skel/$file" "$pkgdir/etc/skel/$file"
+  done < <(cd "$root/skel" && find . -type f -printf '%P\0')
+  install -Dm644 "$root/system/pam.d/greetd-greeter" "$pkgdir/usr/lib/pam.d/greetd-greeter"
+  install -Dm755 "$root/src/desktop/pyre-record" "$pkgdir/usr/bin/pyre-record"
+}

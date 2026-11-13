@@ -1,0 +1,59 @@
+# shellcheck shell=bash
+# help: update safely: keyrings first, pacman -Syu, AUR, reconcile, boot checks
+# usage: pyre update [--noconfirm]
+#   --noconfirm   pass --noconfirm to pacman and the AUR helper
+# Plain "sudo pacman -Syu" is just as safe: snap-pac snapshots it and the
+# pacman hook reconciles system state. pyre update adds the rest (ADR 0007).
+
+update_space() {
+  local path need avail
+  for path in /:2048 /boot:256; do
+    need="${path#*:}"
+    avail="$(df --output=avail -m "$PYRE_ROOT${path%%:*}" 2>/dev/null | tail -n 1 | tr -dc '0-9')"
+    [[ -z "$avail" ]] || (( avail >= need )) ||
+      die "only ${avail} MiB free on ${path%%:*}; an update needs ${need} MiB (pyre snapshot list, then snapper delete)"
+  done
+}
+
+cmd_update() {
+  local opts=() keyrings=(archlinux-keyring) helper
+  case "${1:-}" in
+    "") ;;
+    --noconfirm) opts=(--noconfirm) ;;
+    -h | --help) command_usage "${BASH_SOURCE[0]}"; return 0 ;;
+    *) die "update: unknown option $1" ;;
+  esac
+  [[ $EUID -ne 0 ]] || die "run pyre update as your user; it uses sudo for the system steps"
+  update_space
+
+  step "Refreshing keyrings"
+  pacman -Q pyre-keyring >/dev/null 2>&1 && keyrings+=(pyre-keyring)
+  as_root pacman -Sy --needed "${opts[@]}" "${keyrings[@]}"
+
+  step "Upgrading the system (snapshotted by snap-pac)"
+  as_root pacman -Su "${opts[@]}"
+
+  for helper in paru yay; do
+    if command -v "$helper" >/dev/null 2>&1; then
+      step "Upgrading AUR packages ($helper)"
+      "$helper" -Sua "${opts[@]}"
+      break
+    fi
+  done
+
+  step "Snapshotting home"
+  local home_snapshot=""
+  if home_snapshot="$(snapper -c home create --cleanup-algorithm number --description "pyre update" --print-number)"; then
+    info "home snapshot $home_snapshot"
+  else
+    warn "no home snapshot (are you in the wheel group?)"
+  fi
+  PYRE_HOME_SNAPSHOT="$home_snapshot" "$PYRE_BIN" reconcile --user
+  "$PYRE_BIN" doctor --boot
+
+  if [[ ! -d "$PYRE_ROOT/usr/lib/modules/$(uname -r)" ]]; then
+    printf '\nThe running kernel was updated: reboot to use it.\n'
+  else
+    printf '\nUp to date. No reboot needed for the kernel.\n'
+  fi
+}

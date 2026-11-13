@@ -1,0 +1,7 @@
+# NVIDIA GPUs before Turing lack GSP firmware, so the open modules do not
+# support them. PyreOS installs nothing and the kernel's nouveau driver runs.
+# The proprietary legacy branch is only in the AUR.
+match_pci_vendor = 10de
+match_pci_class = 0300 0302
+match_pci_device_max = 1dff
+note = pre-Turing NVIDIA GPU: using nouveau; the proprietary legacy driver is in the AUR

@@ -1,0 +1,10 @@
+// Your niri config. This file is yours: PyreOS never rewrites it.
+// The PyreOS defaults come first; anything below the include overrides them.
+// Reference: https://github.com/niri-wm/niri/wiki and docs/KEYBINDINGS.md.
+include "/usr/share/pyre/defaults/niri/pyre.kdl"
+
+// Your settings go here. For example, a monitor layout:
+// output "DP-1" {
+//     mode "1920x1080@60"
+//     position x=0 y=0
+// }

@@ -1,0 +1,6 @@
+# ~/.bashrc, created by PyreOS. This file is yours to edit.
+
+# PyreOS defaults: history, aliases, fzf, zoxide and the starship prompt.
+[[ -r /usr/share/pyre/defaults/bash/rc ]] && source /usr/share/pyre/defaults/bash/rc
+
+# Your own exports, aliases and functions go below.

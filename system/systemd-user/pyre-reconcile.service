@@ -1,0 +1,12 @@
+# PyreOS (ADR 0014): converge your state at login after PyreOS updates.
+# It changes nothing you own: it adds missing stubs, or writes .pyre-new
+# copies beside files that would change. Inspect with: pyre reconcile --user --dry-run
+[Unit]
+Description=PyreOS user reconcile
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pyre reconcile --user
+
+[Install]
+WantedBy=default.target

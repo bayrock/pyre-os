@@ -1,0 +1,17 @@
+# Maintainer: PyreOS contributors
+# The PyreOS installer for the live medium (ADR 0006, ADR 0011). The sources are
+# in src/installer/ of this repository, so the package is built in place.
+pkgname=pyre-installer
+pkgver=0.3.0
+pkgrel=1
+pkgdesc='PyreOS installer: archinstall for disks, then the boot stack and the desktop session'
+arch=(any)
+url='https://github.com/bayrock/pyre-os'
+license=(MIT)
+depends=(archinstall arch-install-scripts bash btrfs-progs cryptsetup gum jq snapper util-linux)
+
+package() {
+  local src="$startdir/../../src/installer"
+  install -Dm755 "$src/pyre-install" "$pkgdir/usr/bin/pyre-install"
+  install -Dm644 -t "$pkgdir/usr/lib/pyre/installer" "$src"/lib/*.sh "$src/lib/pacman-offline.conf"
+}

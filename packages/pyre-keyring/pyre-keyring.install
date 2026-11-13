@@ -1,0 +1,10 @@
+post_upgrade() {
+  # Populate only an initialized keyring; pacman-init does it on first boot otherwise.
+  if usr/bin/pacman-key -l >/dev/null 2>&1; then
+    usr/bin/pacman-key --populate pyre
+  fi
+}
+
+post_install() {
+  post_upgrade
+}

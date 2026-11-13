@@ -1,0 +1,24 @@
+# Maintainer: PyreOS contributors
+pkgname=pyre-release
+pkgver=0.2.0
+pkgrel=1
+pkgdesc='PyreOS release identity (os-release) and repository mirrorlist'
+arch=(any)
+url='https://github.com/bayrock/pyre-os'
+license=(MIT)
+depends=(bash)
+backup=(etc/pacman.d/pyre-mirrorlist)
+source=(os-release pyre-os-release pyre-os-release.hook pyre-os-release-remove.hook pyre-mirrorlist)
+sha256sums=('e1fad8091fcc8a5b33740d418a5cb7f2f110ae48a96fa5808a91bb88c9548c78'
+            'ac54ded7b685030df4093a496649ba1a59109b3f6a4cf96f6bb75c81885571bd'
+            '4c3a3c74082652177fc376f5e7e6789c1a6e0df2758b4ac31c766b5d19e2ee12'
+            'e732fd6b180bf0855666382bac94e26d083394c96315b11cf223223c6c2a6c7d'
+            '6de343d897590f2b5264caacb954304a329cffac17b2a35ee33a6c8d84dcdc89')
+
+package() {
+  install -Dm644 os-release "$pkgdir/usr/lib/pyre/os-release"
+  install -Dm755 pyre-os-release "$pkgdir/usr/share/libalpm/scripts/pyre-os-release"
+  install -Dm644 pyre-os-release.hook "$pkgdir/usr/share/libalpm/hooks/pyre-os-release.hook"
+  install -Dm644 pyre-os-release-remove.hook "$pkgdir/usr/share/libalpm/hooks/pyre-os-release-remove.hook"
+  install -Dm644 pyre-mirrorlist "$pkgdir/etc/pacman.d/pyre-mirrorlist"
+}

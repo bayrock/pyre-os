@@ -1,0 +1,15 @@
+# Maintainer: PyreOS contributors
+# A PyreOS bundle (ARCHITECTURE.md, Default applications): a meta-package
+# that pyre install office adds and pyre remove office takes away again.
+pkgname=pyre-bundle-office
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='PyreOS bundle: office'
+arch=(any)
+url='https://github.com/bayrock/pyre-os'
+license=(MIT)
+depends=(
+  libreoffice-fresh
+  thunderbird
+  hunspell-en_us
+)

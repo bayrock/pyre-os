@@ -1,0 +1,99 @@
+# shellcheck shell=bash
+# help: detect hardware and apply its rules: drivers, early KMS, kernel arguments
+# usage: pyre hw [detect | packages | apply [--no-packages]]
+#   detect          the matching rules and what they would do (default)
+#   packages        the packages the matching rules need, one line
+#   apply           install them, then write the drop-ins and rebuild boot
+#                   files when they changed; safe to run again
+#   --no-packages   skip the install (pyre-install installs them offline)
+
+# shellcheck source=src/cli/lib/hw.sh
+source "$PYRE_LIB/lib/hw.sh"
+
+hw_detect() {
+  local rule found=0 value key
+  step "Hardware rules"
+  while IFS= read -r rule; do
+    found=1
+    printf '  %s\n' "$(basename -- "$rule" .rule)"
+    for key in note packages modules kernel_args files; do
+      value="$(rule_get "$rule" "$key")"
+      [[ -z "$value" ]] || printf '      %-12s %s\n' "$key" "$value"
+    done
+  done < <(hw_matched)
+  (( found )) || info "no rule matches this machine; nothing to do"
+}
+
+hw_apply() {
+  local no_packages="$1" pkgs missing=() pkg modules args rule dir file target
+  local changed=0 previous="$HW_STATE/files" current=()
+  if [[ $EUID -ne 0 && -z "$PYRE_ROOT" ]]; then
+    local again=(hw apply)
+    [[ "$no_packages" == 0 ]] || again+=(--no-packages)
+    exec sudo -- "$PYRE_BIN" "${again[@]}"
+  fi
+
+  pkgs="$(hw_collect packages)"
+  if [[ "$no_packages" == 0 && -n "$pkgs" ]]; then
+    for pkg in $pkgs; do pacman -Q "$pkg" >/dev/null 2>&1 || missing+=("$pkg"); done
+    if (( ${#missing[@]} )); then
+      step "Installing ${missing[*]}"
+      pacman -S --needed --noconfirm "${missing[@]}"
+    fi
+  fi
+
+  modules="$(hw_collect modules)"
+  if [[ -n "$modules" ]]; then
+    printf '# Written by pyre hw apply; rerun it after hardware changes.\nMODULES+=(%s)\n' "$modules" |
+      write_if_changed "$HW_MODULES_CONF" && changed=1
+  else
+    remove_if_present "$HW_MODULES_CONF" && changed=1
+  fi
+  args="$(hw_collect kernel_args)"
+  if [[ -n "$args" ]]; then
+    printf '# Written by pyre hw apply; rerun it after hardware changes.\nKERNEL_CMDLINE[default]+=" %s"\n' "$args" |
+      write_if_changed "$HW_CMDLINE_CONF" && changed=1
+  else
+    remove_if_present "$HW_CMDLINE_CONF" && changed=1
+  fi
+
+  while IFS= read -r rule; do
+    dir="$(rule_get "$rule" files)"
+    [[ -n "$dir" && -d "$HW_FILES/$dir" ]] || continue
+    while IFS= read -r -d '' file; do
+      target="/$file"
+      current+=("$target")
+      write_if_changed "$PYRE_ROOT$target" <"$HW_FILES/$dir/$file" && info "wrote $target"
+    done < <(cd -- "$HW_FILES/$dir" && find . -type f -printf '%P\0')
+  done < <(hw_matched)
+  # Files of rules that no longer match (hardware removed) go away.
+  if [[ -f "$previous" ]]; then
+    while IFS= read -r target; do
+      [[ " ${current[*]} " == *" $target "* ]] || { remove_if_present "$PYRE_ROOT$target" && info "removed $target"; }
+    done <"$previous"
+  fi
+  printf '%s\n' "${current[@]}" | write_if_changed "$previous" || true
+
+  if (( changed )); then
+    step "Rebuilding the initramfs and boot entries"
+    limine-update
+  else
+    info "boot files unchanged"
+  fi
+}
+
+cmd_hw() {
+  case "${1:-detect}" in
+    detect) hw_detect ;;
+    packages) hw_collect packages ;;
+    apply)
+      case "${2:-}" in
+        "") hw_apply 0 ;;
+        --no-packages) hw_apply 1 ;;
+        *) die "hw apply: unknown option $2" ;;
+      esac
+      ;;
+    -h | --help) command_usage "${BASH_SOURCE[0]}" ;;
+    *) die "hw: unknown action $1" ;;
+  esac
+}

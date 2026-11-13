@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# Build packages/*/PKGBUILD into the local [pyre] repo at build/repo/. Run as your user.
+# Usage: tools/build-pkgs [--syncdeps] [--rebuild] [name ...]   (default: all packages)
+# PyreOS packages (no makedepends) are rebuilt every run with makepkg --nodeps.
+# Vendored packages (with makedepends) build in a devtools clean chroot under
+# build/chroot/, which asks for sudo, and are reused while their version is
+# unchanged. --rebuild forces them. --syncdeps builds them with makepkg --syncdeps
+# instead, for throwaway CI containers.
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+build_root="$repo_root/build"
+repo_dir="$build_root/repo"
+chroot_dir="$build_root/chroot"
+
+die() {
+  printf 'build-pkgs: %s\n' "$*" >&2
+  exit 1
+}
+
+syncdeps=0
+rebuild=0
+names=()
+for arg in "$@"; do
+  case "$arg" in
+    --syncdeps) syncdeps=1 ;;
+    --rebuild) rebuild=1 ;;
+    -h|--help) sed -n '2,8s/^# //p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -*) die "unknown option: $arg" ;;
+    *) names+=("$arg") ;;
+  esac
+done
+
+[[ $EUID -ne 0 ]] || die "makepkg refuses root; run as your user"
+command -v makepkg >/dev/null 2>&1 || die "makepkg is unavailable"
+
+all_names=()
+for pkgbuild in "$repo_root"/packages/*/PKGBUILD; do
+  all_names+=("$(basename -- "$(dirname -- "$pkgbuild")")")
+done
+(( ${#names[@]} )) || names=("${all_names[@]}")
+
+export PKGDEST="$repo_dir"
+export BUILDDIR="$build_root/pkgbuild"
+export SRCDEST="$build_root/pkgsrc"
+export LOGDEST="$build_root/logs"
+export PACKAGER="PyreOS development build <dev@pyreos.invalid>"
+mkdir -p -- "$PKGDEST" "$BUILDDIR" "$SRCDEST" "$LOGDEST"
+
+# The package name of a file name-pkgver-pkgrel-arch.pkg.tar.zst.
+pkg_name_of() {
+  local base="${1##*/}"
+  base="${base%.pkg.tar.zst}"
+  base="${base%-*}"; base="${base%-*}"; base="${base%-*}"
+  printf '%s\n' "$base"
+}
+
+# Remove every built file in the repo whose package name is in the arguments.
+remove_built() {
+  local file name want
+  shopt -s nullglob
+  for file in "$repo_dir"/*.pkg.tar.zst; do
+    name="$(pkg_name_of "$file")"
+    for want in "$@"; do
+      [[ "$name" == "$want" ]] && rm -f -- "$file"
+    done
+  done
+  shopt -u nullglob
+}
+
+ensure_chroot() {
+  command -v makechrootpkg >/dev/null 2>&1 || die "makechrootpkg is unavailable; install devtools"
+  if [[ ! -d "$chroot_dir/root" ]]; then
+    printf '==> creating clean chroot %s (sudo)\n' "$chroot_dir/root"
+    mkdir -p -- "$chroot_dir"
+    sudo mkarchroot \
+      -C /usr/share/devtools/pacman.conf.d/extra.conf \
+      -M /usr/share/devtools/makepkg.conf.d/x86_64.conf \
+      "$chroot_dir/root" base-devel
+  fi
+}
+
+for name in "${names[@]}"; do
+  [[ "$name" =~ ^[a-z0-9][a-z0-9._+-]*$ ]] || die "invalid package name: $name"
+  dir="$repo_root/packages/$name"
+  [[ -f "$dir/PKGBUILD" ]] || die "no PKGBUILD for $name"
+
+  mapfile -t outputs < <(cd -- "$dir" && makepkg --packagelist)
+  (( ${#outputs[@]} )) || die "makepkg --packagelist printed nothing for $name"
+  produced=()
+  for file in "${outputs[@]}"; do produced+=("$(pkg_name_of "$file")"); done
+
+  # Capture first: grep -q exiting early would SIGPIPE makepkg under pipefail.
+  srcinfo="$(cd -- "$dir" && makepkg --printsrcinfo)"
+  if ! grep -q '^[[:space:]]*makedepends = ' <<<"$srcinfo"; then
+    printf '==> %s\n' "$name"
+    remove_built "${produced[@]}"
+    # --nodeps: PyreOS packages depend on each other and on packages the host
+    # lacks; they have no build-time dependencies.
+    (cd -- "$dir" && makepkg --force --clean --cleanbuild --nodeps --noconfirm --log) \
+      || die "makepkg failed for $name (logs in $LOGDEST)"
+    continue
+  fi
+
+  present=1
+  for file in "${outputs[@]}"; do [[ -f "$file" ]] || present=0; done
+  if (( present && !rebuild )); then
+    printf '==> %s (vendored, already built; --rebuild to force)\n' "$name"
+    continue
+  fi
+
+  remove_built "${produced[@]}"
+  if (( syncdeps )); then
+    printf '==> %s (vendored, makepkg --syncdeps)\n' "$name"
+    (cd -- "$dir" && makepkg --force --clean --cleanbuild --syncdeps --rmdeps --noconfirm --log) \
+      || die "makepkg failed for $name (logs in $LOGDEST)"
+  else
+    printf '==> %s (vendored, clean chroot; sudo)\n' "$name"
+    if ! sudo -n true 2>/dev/null && [[ ! -t 0 ]]; then
+      die "$name needs a clean-chroot build, which asks for sudo; run tools/build-pkgs in a terminal"
+    fi
+    ensure_chroot
+    (cd -- "$dir" && makechrootpkg -c -u -r "$chroot_dir") \
+      || die "makechrootpkg failed for $name (logs in $LOGDEST)"
+  fi
+done
+
+# Drop files of packages that no longer exist in packages/, then index the rest.
+shopt -s nullglob
+known=()
+for name in "${all_names[@]}"; do
+  mapfile -t outputs < <(cd -- "$repo_root/packages/$name" && makepkg --packagelist)
+  for file in "${outputs[@]}"; do known+=("$(pkg_name_of "$file")"); done
+done
+for file in "$repo_dir"/*.pkg.tar.zst; do
+  name="$(pkg_name_of "$file")"
+  [[ " ${known[*]} " == *" $name "* ]] || { printf 'removing stale %s\n' "${file##*/}"; rm -f -- "$file" "$file.sig"; }
+done
+
+pkgs=("$repo_dir"/*.pkg.tar.zst)
+(( ${#pkgs[@]} )) || die "no packages were produced"
+# Sign with the development key when it is here (ADR 0014); pyre-keyring
+# trusts it. CI and fresh checkouts build unsigned packages.
+sign_key=E150852868B407FB17F1149AE59B1D8F2343FD47
+sign_home="$repo_root/build/keys/gnupg"
+sign=()
+if [[ -d "$sign_home" ]] && GNUPGHOME="$sign_home" gpg --batch --list-secret-keys "$sign_key" >/dev/null 2>&1; then
+  export GNUPGHOME="$sign_home"
+  sign=(--sign --key "$sign_key")
+  for file in "${pkgs[@]}"; do
+    [[ -f "$file.sig" && "$file.sig" -nt "$file" ]] && continue
+    gpg --batch --yes --pinentry-mode error -u "$sign_key" --detach-sign -- "$file"
+  done
+else
+  printf 'note: no development key in %s; packages are unsigned\n' "$sign_home"
+fi
+rm -f -- "$repo_dir"/pyre.db* "$repo_dir"/pyre.files*
+repo-add --quiet "${sign[@]}" "$repo_dir/pyre.db.tar.zst" "${pkgs[@]}"
+printf '\nLocal repo %s:\n' "$repo_dir"
+printf '  %s\n' "${pkgs[@]##*/}"

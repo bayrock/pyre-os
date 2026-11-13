@@ -1,0 +1,7 @@
+# PyreOS package repository servers (ADR 0009, ADR 0014).
+# /etc/pacman.conf includes this file from its [pyre] section, which
+# pyre-install adds only when a server is set. pacman keeps your edits.
+#
+# The public testing channel is not hosted yet; pyre-install --config can set
+# one with pyre_repo = "URL".
+#Server = https://example.invalid/pyre/testing/$arch

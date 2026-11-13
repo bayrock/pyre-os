@@ -1,0 +1,10 @@
+NAME="PyreOS"
+PRETTY_NAME="PyreOS"
+ID=pyreos
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;255;107;53"
+HOME_URL="https://github.com/bayrock/pyre-os"
+DOCUMENTATION_URL="https://github.com/bayrock/pyre-os/tree/main/docs"
+BUG_REPORT_URL="https://github.com/bayrock/pyre-os/issues"
+LOGO=pyreos

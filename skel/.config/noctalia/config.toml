@@ -1,0 +1,6 @@
+# Your Noctalia config. This file is yours: PyreOS never rewrites it.
+# The PyreOS defaults load first and your settings below override them.
+# Changes made in Noctalia's settings window go to
+# ~/.local/state/noctalia/settings.toml and win over this file.
+[include]
+files = ["/usr/share/pyre/defaults/noctalia/pyre.toml"]

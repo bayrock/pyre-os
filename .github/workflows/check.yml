@@ -1,0 +1,48 @@
+# Offline checks and package builds on every push and pull request.
+# Runs in an Arch container so tool versions match the development host.
+name: check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed git shellcheck bats python jq diffutils
+      - uses: actions/checkout@v5
+      - name: tools/check
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tools/check
+
+  packages:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed base-devel git namcap
+      - uses: actions/checkout@v5
+      # Vendored packages (GraalVM builds) are reused from the newest cache while
+      # their version is unchanged; tools/build-pkgs rebuilds PyreOS packages anyway.
+      - uses: actions/cache@v4
+        with:
+          path: build/repo
+          key: repo-${{ github.run_id }}
+          restore-keys: repo-
+      - name: tools/build-pkgs
+        # makepkg refuses root, so build as an unprivileged user. --syncdeps installs
+        # the vendored packages' makedepends into this throwaway container.
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(root) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/builder
+          chown -R builder: "$GITHUB_WORKSPACE"
+          su builder -c 'tools/build-pkgs --syncdeps'
+      - name: namcap
+        run: namcap build/repo/*.pkg.tar.zst

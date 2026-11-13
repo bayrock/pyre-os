@@ -1,0 +1,13 @@
+# PyreOS (ADR 0014): converge system state after PyreOS packages change.
+# Sorts before snap-pac's zz-snap-pac-post.hook, so the post snapshot
+# includes what reconcile changed.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = pyre-*
+
+[Action]
+Description = Reconciling PyreOS system state...
+When = PostTransaction
+Exec = /usr/bin/pyre reconcile --system

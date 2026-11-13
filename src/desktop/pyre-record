@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Start a screen recording, or stop the running one (bound to Mod+Print).
+# gpu-screen-recorder captures through the screen-cast portal, so the first
+# run asks which output or window to record; the choice is remembered.
+# Usage: pyre-record
+set -euo pipefail
+
+notify() {
+  command -v notify-send >/dev/null && notify-send -a "Screen recorder" "$@" || true
+}
+
+# PYRE_RECORD_DIR overrides the folder; xdg-user-dir falls back to $HOME.
+dir="${PYRE_RECORD_DIR:-$(xdg-user-dir VIDEOS 2>/dev/null || true)}"
+[[ -n "$dir" && "$dir" != "$HOME" ]] || dir="$HOME/Videos"
+
+# The process name is cut to 15 characters, so match the command line.
+if pkill -INT -u "$UID" -f '^gpu-screen-recorder( |$)'; then
+  notify "Recording stopped" "Saved in $dir."
+  exit 0
+fi
+
+mkdir -p -- "$dir"
+notify "Recording" "Press Mod+Print again to stop."
+# Hardware encoding when the GPU has it, otherwise x264 on the CPU.
+exec gpu-screen-recorder -w portal -restore-portal-session yes -fallback-cpu-encoding yes \
+  -f 60 -a default_output -o "$dir/Recording $(date '+%Y-%m-%d %H-%M-%S').mp4"

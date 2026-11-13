@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# pyre: the PyreOS lifecycle tool (ADR 0014). Plain pacman is always safe;
+# pyre adds snapshots, reconcile, boot checks and hardware rules around it.
+# Usage: pyre <command> [options]     pyre help [command]
+set -euo pipefail
+
+here="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
+# An explicit PYRE_LIB wins; from a checkout, use the files next to this script.
+if [[ -z "${PYRE_LIB:-}" ]]; then
+  PYRE_LIB=/usr/lib/pyre
+  [[ -f "$here/lib/common.sh" ]] && PYRE_LIB="$here"
+fi
+PYRE_BIN="$(readlink -f -- "${BASH_SOURCE[0]}")"
+export PYRE_LIB PYRE_BIN
+
+# shellcheck source=src/cli/lib/common.sh
+source "$PYRE_LIB/lib/common.sh"
+
+main() {
+  local cmd="${1:-help}"
+  (( $# )) && shift
+  case "$cmd" in -h | --help) cmd=help ;; esac
+  if [[ ! "$cmd" =~ ^[a-z][a-z-]*$ || ! -f "$PYRE_LIB/commands/$cmd" ]]; then
+    printf 'pyre: unknown command: %s\n\n' "$cmd" >&2
+    command_list >&2
+    exit 2
+  fi
+  # shellcheck source=/dev/null
+  source "$PYRE_LIB/commands/$cmd"
+  "cmd_${cmd//-/_}" "$@"
+}
+
+main "$@"

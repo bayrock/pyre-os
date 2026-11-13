@@ -1,0 +1,11 @@
+# NVIDIA GPUs with GSP firmware (Turing, device 0x1e00, and newer) use the open
+# kernel modules (ARCHITECTURE.md, Hardware rules). dkms builds them for both
+# kernels, so both kernels' headers are needed. Early KMS loads the modules
+# in the initramfs. The files add niri's VRAM fix and the VA-API driver.
+match_pci_vendor = 10de
+match_pci_class = 0300 0302
+match_pci_device_min = 1e00
+packages = nvidia-open-dkms nvidia-utils libva-nvidia-driver linux-headers linux-lts-headers
+modules = nvidia nvidia_modeset nvidia_uvm nvidia_drm
+kernel_args = nvidia_drm.modeset=1
+files = nvidia-open

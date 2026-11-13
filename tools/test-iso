@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Boot-test a PyreOS ISO headless under UEFI and BIOS and check its identity.
+# Usage: tools/test-iso [ISO]   (default: newest build/out/pyreos-*.iso)
+# For each firmware: wait for the serial getty, then type a probe on tty1
+# (releng autologs root there) that reports os-release and the keyring on ttyS0.
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+timeout_s=240
+
+die() {
+  printf 'test-iso: %s\n' "$*" >&2
+  exit 1
+}
+
+case "${1:-}" in -h|--help) sed -n '2,5s/^# //p' "${BASH_SOURCE[0]}"; exit 0 ;; esac
+iso="${1:-}"
+if [[ -z "$iso" ]]; then
+  iso="$(find "$repo_root/build/out" -maxdepth 1 -name 'pyreos-*.iso' -printf '%T@ %p\n' 2>/dev/null |
+    sort -n | tail -n 1 | cut -d' ' -f2-)"
+fi
+[[ -n "$iso" && -f "$iso" ]] || die "no ISO found; build one with sudo tools/build-iso"
+
+# Wait until the serial log matches a pattern; fail on panic or timeout.
+wait_for() {
+  local log="$1" pattern="$2" deadline=$((SECONDS + timeout_s))
+  while (( SECONDS < deadline )); do
+    if grep -qaE 'Kernel panic|emergency mode' "$log" 2>/dev/null; then
+      return 2
+    fi
+    grep -qaE "$pattern" "$log" 2>/dev/null && return 0
+    sleep 1
+  done
+  return 1
+}
+
+run_one() {
+  local firmware="$1" name="test-iso-$1" log vm_pid result=0
+  log="$repo_root/build/vm/$name/serial.log"
+  local -a fw_args=()
+  [[ "$firmware" == bios ]] && fw_args=(--bios)
+
+  printf '== %s: booting %s\n' "$firmware" "${iso##*/}"
+  rm -f -- "$log"  # never match a previous run's log before QEMU truncates it
+  "$repo_root/tools/run-vm" --name "$name" "${fw_args[@]}" --fresh --no-disk --display none "$iso" >/dev/null &
+  vm_pid=$!
+  # shellcheck disable=SC2064 # expand now: stop this VM on any exit.
+  trap "'$repo_root/tools/vm-ctl' --name '$name' quit >/dev/null 2>&1 || true" EXIT
+
+  local start=$SECONDS
+  if ! wait_for "$log" 'archiso login:'; then
+    printf 'FAIL %s: no serial login prompt (see %s)\n' "$firmware" "$log"
+    result=1
+  else
+    printf '   serial login prompt after %ds\n' "$((SECONDS - start))"
+    sleep 5  # let the tty1 autologin shell finish starting
+    # shellcheck disable=SC2016 # the probe is typed into the guest verbatim.
+    "$repo_root/tools/vm-ctl" --name "$name" type \
+      '{ echo; systemctl start pacman-init.service; echo "PROBE link=$(readlink /etc/os-release)"; grep -E "^(ID|NAME)=" /etc/os-release | sed "s/^/PROBE /"; pacman-key --list-keys dev@pyreos.invalid >/dev/null 2>&1 && echo PROBE key=ok; echo PROBE done; } > /dev/ttyS0\n'
+    if ! wait_for "$log" 'PROBE done'; then
+      printf 'FAIL %s: probe did not finish\n' "$firmware"
+      result=1
+    else
+      grep -a '^PROBE' "$log" | tr -d '\r' | sed 's/^/   /'
+      local probe
+      probe="$(grep -a '^PROBE' "$log" | tr -d '\r')"
+      grep -qx 'PROBE ID=pyreos' <<<"$probe" || { printf 'FAIL %s: ID is not pyreos\n' "$firmware"; result=1; }
+      grep -qx 'PROBE link=../usr/lib/pyre/os-release' <<<"$probe" || { printf 'FAIL %s: os-release link\n' "$firmware"; result=1; }
+      grep -qx 'PROBE key=ok' <<<"$probe" || { printf 'FAIL %s: dev key not in keyring\n' "$firmware"; result=1; }
+    fi
+  fi
+
+  "$repo_root/tools/vm-ctl" --name "$name" quit >/dev/null 2>&1 || true
+  wait "$vm_pid" 2>/dev/null || true
+  trap - EXIT
+  (( result == 0 )) && printf '   PASS %s\n' "$firmware"
+  return "$result"
+}
+
+status=0
+run_one uefi || status=1
+run_one bios || status=1
+(( status == 0 )) && printf '\ntest-iso: all boot checks passed\n' || printf '\ntest-iso: FAILED\n'
+exit "$status"

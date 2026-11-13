@@ -1,0 +1,47 @@
+# Packages pyre-install needs without a network (ADR 0006, ADR 0011).
+# tools/build-iso resolves their full dependency closure from the same mirror
+# snapshot as the live system and ships it in /opt/pyre-offline, together with
+# Arch's sync databases, so every Arch package keeps its signature.
+
+# What archinstall 4.5 installs for the generated config
+base
+sudo
+linux-firmware
+mkinitcpio
+linux
+linux-lts
+amd-ucode
+intel-ucode
+btrfs-progs
+networkmanager
+wpa_supplicant
+terminus-font
+# archinstall adds these when the live session uses accessibility tools
+alsa-utils
+brltty
+espeakup
+
+# PyreOS base system and desktop
+pyre-base
+pyre-desktop
+# Preferred providers, named so pacman never picks another (lib/archinstall.sh)
+pipewire-jack
+noto-fonts
+xdg-desktop-portal-gnome
+
+# Packages of the hardware rules (src/hw/rules), which pyre-install applies
+nvidia-open-dkms
+nvidia-utils
+libva-nvidia-driver
+linux-headers
+linux-lts-headers
+vulkan-radeon
+vulkan-intel
+intel-media-driver
+
+# The boot stack pyre-install adds (src/installer/lib/boot.sh)
+limine
+limine-mkinitcpio-hook
+limine-snapper-sync
+efibootmgr
+snap-pac

@@ -1,0 +1,31 @@
+# archiso generated output and work directories
+/out/
+/work/
+/build/
+*.iso
+*.iso.sig
+
+# Package/build artifacts
+*.pkg.tar.*
+*.src.tar.*
+/packages/*/pkg/
+/packages/*/src/
+
+# Local machine/build configuration and credentials
+.env
+.env.*
+!.env.example
+*.gpg
+*.asc
+*.key
+# Public development keyring (tools/dev-key); private keys stay in build/keys/.
+!packages/pyre-keyring/pyre.gpg
+
+# Editor and OS noise
+.DS_Store
+*~
+*.swp
+*.swo
+
+# Python bytecode from dev tools
+__pycache__/

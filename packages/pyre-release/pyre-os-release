@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Point /etc/os-release at the PyreOS identity without touching admin files (ADR 0010).
+# Usage: pyre-os-release link|unlink   (PYRE_ROOT relocates / for tests)
+set -euo pipefail
+
+etc="${PYRE_ROOT:-}/etc/os-release"
+pyre_target=../usr/lib/pyre/os-release
+arch_target=../usr/lib/os-release
+
+current=""
+[[ -L "$etc" ]] && current="$(readlink -- "$etc")"
+
+case "${1:-}" in
+  link)
+    if [[ ! -e "$etc" && ! -L "$etc" ]] || [[ "$current" == "$arch_target" ]]; then
+      ln -sfn -- "$pyre_target" "$etc"
+    fi
+    ;;
+  unlink)
+    if [[ "$current" == "$pyre_target" ]]; then
+      ln -sfn -- "$arch_target" "$etc"
+    fi
+    ;;
+  *)
+    printf 'usage: %s link|unlink\n' "${0##*/}" >&2
+    exit 2
+    ;;
+esac

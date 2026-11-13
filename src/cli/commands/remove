@@ -1,0 +1,17 @@
+# shellcheck shell=bash
+# help: remove a bundle and the apps nothing else needs
+# usage: pyre remove BUNDLE...
+
+# shellcheck source=src/cli/lib/bundles.sh
+source "$PYRE_LIB/lib/bundles.sh"
+
+cmd_remove() {
+  local name pkgs=()
+  case "${1:-}" in
+    -h | --help | "") command_usage "${BASH_SOURCE[0]}"; return 0 ;;
+  esac
+  for name in "$@"; do bundle_check "$name"; pkgs+=("pyre-bundle-$name"); done
+  # -s also removes the bundle's apps unless something else needs them, or
+  # they were installed explicitly.
+  as_root pacman -Rs "${pkgs[@]}"
+}

@@ -1,0 +1,52 @@
+# shellcheck shell=bash
+# help: converge system or user state after PyreOS package updates
+# usage: pyre reconcile --system|--user [--dry-run]
+#   --system    system units, as root (the pacman hook runs this)
+#   --user      your units (pyre-reconcile.service runs this at login)
+#   --dry-run   show what would change, change nothing
+
+# shellcheck source=src/cli/lib/reconcile.sh
+source "$PYRE_LIB/lib/reconcile.sh"
+
+# Before user units change anything, snapshot home (ADR 0007). A failed
+# snapshot is reported, not fatal: user units only add missing files or
+# write .pyre-new copies, and a user outside ALLOW_GROUPS can never snapshot.
+reconcile_home_snapshot() {
+  [[ -z "${PYRE_HOME_SNAPSHOT:-}" ]] || { info "home snapshot ${PYRE_HOME_SNAPSHOT} already taken"; return 0; }
+  if snapper -c home create --cleanup-algorithm number \
+    --description "pyre: before user reconcile" 2>/dev/null; then
+    info "home snapshot taken"
+  else
+    warn "no home snapshot (snapper -c home create failed); continuing"
+  fi
+}
+
+cmd_reconcile() {
+  local scope="" dry=0
+  while (( $# )); do
+    case "$1" in
+      --system) scope=system ;;
+      --user) scope=user ;;
+      --dry-run) dry=1 ;;
+      -h | --help) command_usage "${BASH_SOURCE[0]}"; return 0 ;;
+      *) die "reconcile: unknown option $1" ;;
+    esac
+    shift
+  done
+  case "$scope" in
+    system)
+      if [[ $EUID -ne 0 && -z "$PYRE_ROOT" ]]; then
+        local args=(--system)
+        [[ "$dry" == 0 ]] || args+=(--dry-run)
+        exec sudo -- "$PYRE_BIN" reconcile "${args[@]}"
+      fi
+      reconcile_scope system "$PYRE_ROOT/var/lib/pyre/reconcile/system" "$dry"
+      ;;
+    user)
+      [[ $EUID -ne 0 || -n "$PYRE_ROOT" ]] || die "run user reconcile as the user, not root"
+      reconcile_scope user "${XDG_STATE_HOME:-$HOME/.local/state}/pyre/reconcile/user" "$dry" \
+        reconcile_home_snapshot
+      ;;
+    *) command_usage "${BASH_SOURCE[0]}" >&2; return 2 ;;
+  esac
+}

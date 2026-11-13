@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# Boot an ISO and/or a disposable disk image under QEMU/KVM for PyreOS testing.
+# All VM state lives under build/vm/<name>/ (ignored by git). Never touches host disks.
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+vm_root="$repo_root/build/vm"
+
+name="pyreos-dev"
+firmware="uefi"
+fresh=0
+use_disk=1
+disk_size="40G"
+memory="4096"
+cpus="4"
+display="gtk"
+boot_from=""
+net=1
+outputs=1
+iso=""
+
+usage() {
+  cat <<'EOF'
+Usage: tools/run-vm [options] [ISO]
+
+Boot ISO (if given) with a disposable qcow2 disk under build/vm/<name>/.
+
+Options:
+  --name NAME        VM name; state in build/vm/NAME/ (default: pyreos-dev)
+  --bios             Legacy BIOS firmware (default: UEFI via OVMF)
+  --fresh            Recreate the VM's disk and UEFI variables before booting
+  --no-disk          Do not attach a disk (live ISO only)
+  --disk-size SIZE   Size for a newly created disk (default: 40G)
+  --memory MIB       Guest memory in MiB (default: 4096)
+  --cpus N           Guest vCPUs (default: 4)
+  --display MODE     gtk (GL window, default) | sdl | headless (GL, no window) | none (no GL)
+  --boot-disk        Boot from the disk even when an ISO is attached
+  --no-net           No network device (offline installs)
+  --outputs N        Number of monitors, 1-4: one virtio GPU each (default: 1)
+  -h, --help         Show this help
+
+Runtime files in build/vm/NAME/:
+  serial.log   guest serial console (ttyS0) output
+  serial.sock  serial console input (tools/vm-ctl serial)
+  share/       a 9p share for files from the guest:
+               mount -t 9p -o trans=virtio pyre-share /mnt
+  qmp.sock     QMP control socket (see tools/vm-ctl)
+  qemu.pid     PID while running
+EOF
+}
+
+die() {
+  printf 'run-vm: %s\n' "$*" >&2
+  exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --name) name="${2:?--name needs a value}"; shift 2 ;;
+    --bios) firmware="bios"; shift ;;
+    --fresh) fresh=1; shift ;;
+    --no-disk) use_disk=0; shift ;;
+    --disk-size) disk_size="${2:?--disk-size needs a value}"; shift 2 ;;
+    --memory) memory="${2:?--memory needs a value}"; shift 2 ;;
+    --cpus) cpus="${2:?--cpus needs a value}"; shift 2 ;;
+    --display) display="${2:?--display needs a value}"; shift 2 ;;
+    --boot-disk) boot_from="disk"; shift ;;
+    --no-net) net=0; shift ;;
+    --outputs) outputs="${2:?--outputs needs a value}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    -*) die "unknown option: $1 (see --help)" ;;
+    *) [[ -z "$iso" ]] || die "only one ISO may be given"; iso="$1"; shift ;;
+  esac
+done
+
+[[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || die "invalid VM name: $name"
+[[ "$memory" =~ ^[0-9]+$ ]] || die "--memory must be a number of MiB"
+[[ "$cpus" =~ ^[0-9]+$ ]] || die "--cpus must be a number"
+[[ "$outputs" =~ ^[1-4]$ ]] || die "--outputs must be 1-4"
+case "$display" in gtk|sdl|headless|none) ;; *) die "unknown display mode: $display" ;; esac
+[[ -n "$iso" || "$use_disk" -eq 1 ]] || die "nothing to boot: give an ISO or allow a disk"
+if [[ -n "$iso" ]]; then
+  [[ -f "$iso" ]] || die "ISO not found: $iso"
+  iso="$(realpath -- "$iso")"
+fi
+
+command -v qemu-system-x86_64 >/dev/null 2>&1 || die "qemu-system-x86_64 not found; install qemu-desktop (see docs/BUILDING.md)"
+[[ -r /dev/kvm && -w /dev/kvm ]] || die "/dev/kvm is not accessible; KVM acceleration is required"
+
+vm_dir="$vm_root/$name"
+mkdir -p -- "$vm_dir/share"
+resolved_vm_dir="$(realpath -- "$vm_dir")"
+[[ "$resolved_vm_dir" == "$repo_root/build/vm/"* ]] || die "VM directory resolves outside build/vm: $vm_dir"
+
+pid_file="$vm_dir/qemu.pid"
+if [[ -f "$pid_file" ]] && kill -0 "$(<"$pid_file")" 2>/dev/null; then
+  die "VM '$name' is already running (pid $(<"$pid_file"))"
+fi
+rm -f -- "$pid_file" "$vm_dir/qmp.sock" "$vm_dir/serial.sock" "$vm_dir/serial.log"
+
+disk="$vm_dir/disk.qcow2"
+vars="$vm_dir/OVMF_VARS.4m.fd"
+if [[ "$fresh" -eq 1 ]]; then
+  rm -f -- "$disk" "$vars"
+fi
+
+args=(
+  -name "$name"
+  -machine "q35,accel=kvm"
+  -cpu host
+  -smp "$cpus"
+  -m "$memory"
+  -device virtio-rng-pci
+  -device virtio-tablet-pci
+  -chardev "socket,id=serial0,path=$vm_dir/serial.sock,server=on,wait=off,logfile=$vm_dir/serial.log"
+  -serial chardev:serial0
+  -audiodev "none,id=snd0"
+  -device ich9-intel-hda
+  -device "hda-output,audiodev=snd0"
+  -virtfs "local,path=$vm_dir/share,mount_tag=pyre-share,security_model=none,id=share0"
+  -qmp "unix:$vm_dir/qmp.sock,server=on,wait=off"
+  -pidfile "$pid_file"
+)
+
+if (( net )); then
+  args+=(-nic "user,model=virtio-net-pci")
+else
+  args+=(-nic none)
+fi
+
+if [[ "$firmware" == "uefi" ]]; then
+  ovmf_code=/usr/share/edk2/x64/OVMF_CODE.4m.fd
+  ovmf_vars=/usr/share/edk2/x64/OVMF_VARS.4m.fd
+  [[ -f "$ovmf_code" && -f "$ovmf_vars" ]] || die "OVMF firmware not found; install edk2-ovmf (see docs/BUILDING.md)"
+  [[ -f "$vars" ]] || cp -- "$ovmf_vars" "$vars"
+  args+=(
+    -drive "if=pflash,format=raw,unit=0,readonly=on,file=$ovmf_code"
+    -drive "if=pflash,format=raw,unit=1,file=$vars"
+  )
+fi
+
+if [[ "$use_disk" -eq 1 ]]; then
+  if [[ ! -f "$disk" ]]; then
+    command -v qemu-img >/dev/null 2>&1 || die "qemu-img not found"
+    qemu-img create -q -f qcow2 "$disk" "$disk_size"
+  fi
+  args+=(-drive "file=$disk,if=virtio,format=qcow2,discard=unmap")
+fi
+
+if [[ -n "$iso" ]]; then
+  args+=(-drive "file=$iso,media=cdrom,readonly=on")
+fi
+
+if [[ "$boot_from" == "disk" || -z "$iso" ]]; then
+  args+=(-boot order=c)
+else
+  args+=(-boot order=d)
+fi
+
+# headless: QEMU's D-Bus display with GL, on a private session bus. Unlike
+# egl-headless it lets us size every head through SetUIInfo, so the guest sees
+# all --outputs monitors as connected. QMP screendump cannot read GL scanouts
+# (QEMU 11 reports "no surface"), so screen evidence comes from the guest.
+case "$display" in
+  gtk) args+=(-device "virtio-vga-gl,id=gpu0,max_outputs=$outputs" -display "gtk,gl=on") ;;
+  sdl) args+=(-device "virtio-vga-gl,id=gpu0,max_outputs=$outputs" -display "sdl,gl=on") ;;
+  headless) args+=(-device "virtio-vga-gl,id=gpu0,max_outputs=$outputs" -display "dbus,gl=on") ;;
+  none) args+=(-device "virtio-vga,id=gpu0,max_outputs=$outputs" -display none) ;;
+esac
+
+printf 'VM:       %s (%s, %s MiB, %s vCPU, display=%s)\n' "$name" "$firmware" "$memory" "$cpus" "$display"
+printf 'ISO:      %s\n' "${iso:-none}"
+printf 'Disk:     %s\n' "$([[ "$use_disk" -eq 1 ]] && printf '%s' "$disk" || printf 'none')"
+printf 'Serial:   %s\n' "$vm_dir/serial.log"
+printf 'Control:  tools/vm-ctl --name %s <command>\n' "$name"
+if [[ "$display" != headless ]]; then
+  exec qemu-system-x86_64 "${args[@]}"
+fi
+command -v dbus-run-session >/dev/null 2>&1 || die "dbus-run-session not found (package dbus)"
+# Inside the private bus: start QEMU, give every head a 1280x800 size, wait.
+# shellcheck disable=SC2016 # expanded by the inner bash
+exec dbus-run-session -- bash -c '
+  outputs="$1"; shift
+  "$@" &
+  qemu=$!
+  for ((i = 0; i < outputs; i++)); do
+    for _ in $(seq 50); do
+      gdbus call --session --dest org.qemu --object-path "/org/qemu/Display1/Console_$i" \
+        --method org.qemu.Display1.Console.SetUIInfo 320 200 $((i * 1280)) 0 1280 800 >/dev/null 2>&1 && break
+      sleep 0.2
+    done
+  done
+  wait "$qemu"
+' run-vm "$outputs" qemu-system-x86_64 "${args[@]}"

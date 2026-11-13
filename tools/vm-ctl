@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Control a running tools/run-vm guest over its QMP socket.
+
+Development tool only (stdlib, no dependencies). Examples:
+  tools/vm-ctl status
+  tools/vm-ctl screendump build/vm/pyreos-dev/screen.png
+  tools/vm-ctl sendkey ctrl-alt-f2
+  tools/vm-ctl type 'uname -a\n'
+  tools/vm-ctl serial $'uname -a\n'   (sent verbatim: pass a real newline)
+  tools/vm-ctl click 640 400
+  tools/vm-ctl quit
+"""
+import argparse
+import json
+import pathlib
+import socket
+import sys
+import time
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# Characters typed via `type` mapped to QEMU sendkey names.
+KEYMAP = {
+    " ": "spc", "\n": "ret", "\t": "tab", "-": "minus", "=": "equal",
+    "[": "bracket_left", "]": "bracket_right", ";": "semicolon",
+    "'": "apostrophe", "`": "grave_accent", "\\": "backslash", ",": "comma",
+    ".": "dot", "/": "slash",
+}
+SHIFTED = {
+    "_": "minus", "+": "equal", "{": "bracket_left", "}": "bracket_right",
+    ":": "semicolon", '"': "apostrophe", "~": "grave_accent", "|": "backslash",
+    "<": "comma", ">": "dot", "?": "slash", "!": "1", "@": "2", "#": "3",
+    "$": "4", "%": "5", "^": "6", "&": "7", "*": "8", "(": "9", ")": "0",
+}
+
+
+class QMP:
+    def __init__(self, path: pathlib.Path):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(30)
+        self.sock.connect(str(path))
+        self.file = self.sock.makefile("rw", encoding="utf-8")
+        self._read()  # greeting
+        self.execute("qmp_capabilities")
+
+    def _read(self):
+        while True:
+            line = self.file.readline()
+            if not line:
+                raise ConnectionError("QMP socket closed")
+            msg = json.loads(line)
+            if "event" not in msg:
+                return msg
+
+    def execute(self, command, **arguments):
+        payload = {"execute": command}
+        if arguments:
+            payload["arguments"] = arguments
+        self.file.write(json.dumps(payload) + "\n")
+        self.file.flush()
+        reply = self._read()
+        if "error" in reply:
+            raise RuntimeError(f"{command}: {reply['error'].get('desc', reply['error'])}")
+        return reply.get("return")
+
+    def hmp(self, line):
+        return self.execute("human-monitor-command", **{"command-line": line})
+
+
+def key_for(ch):
+    if ch.isalnum():
+        return f"shift-{ch.lower()}" if ch.isupper() else ch
+    if ch in KEYMAP:
+        return KEYMAP[ch]
+    if ch in SHIFTED:
+        return f"shift-{SHIFTED[ch]}"
+    raise ValueError(f"cannot type character {ch!r}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--name", default="pyreos-dev", help="VM name (default: pyreos-dev)")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("status", help="print run state")
+    p = sub.add_parser("screendump", help="save the guest display as PNG")
+    p.add_argument("path")
+    p = sub.add_parser("click", help="left-click at pixel X Y of the first monitor (virtio tablet)")
+    p.add_argument("x", type=int)
+    p.add_argument("y", type=int)
+    p.add_argument("--size", default="1280x800", help="monitor size in pixels (default 1280x800)")
+    p = sub.add_parser("sendkey", help="send key chords, e.g. ctrl-alt-f2 ret")
+    p.add_argument("keys", nargs="+")
+    p = sub.add_parser("type", help="type a string (\\n for Enter)")
+    p.add_argument("text")
+    p.add_argument("--delay", type=float, default=0.03,
+                   help="seconds between keys; back-to-back keys overrun the guest keyboard queue (default 0.03)")
+    p = sub.add_parser("serial", help="write a string verbatim to the guest serial console")
+    p.add_argument("text")
+    p = sub.add_parser("hmp", help="run a raw human-monitor command")
+    p.add_argument("line")
+    sub.add_parser("quit", help="power off the VM immediately")
+    args = parser.parse_args()
+
+    vm_dir = REPO_ROOT / "build" / "vm" / args.name
+    if args.command == "serial":
+        serial_path = vm_dir / "serial.sock"
+        if not serial_path.exists():
+            sys.exit(f"vm-ctl: no serial socket at {serial_path}; is the VM running?")
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+            conn.settimeout(30)
+            conn.connect(str(serial_path))
+            conn.sendall(args.text.encode())
+            time.sleep(0.2)  # let QEMU drain the input before the disconnect
+        return
+
+    sock_path = vm_dir / "qmp.sock"
+    if not sock_path.exists():
+        sys.exit(f"vm-ctl: no QMP socket at {sock_path}; is the VM running?")
+    qmp = QMP(sock_path)
+
+    if args.command == "status":
+        print(qmp.execute("query-status")["status"])
+    elif args.command == "screendump":
+        out = pathlib.Path(args.path).resolve()
+        out.parent.mkdir(parents=True, exist_ok=True)
+        qmp.execute("screendump", filename=str(out), format="png")
+        print(out)
+    elif args.command == "sendkey":
+        for chord in args.keys:
+            qmp.hmp(f"sendkey {chord}")
+    elif args.command == "type":
+        text = args.text.encode().decode("unicode_escape")
+        for ch in text:
+            qmp.hmp(f"sendkey {key_for(ch)}")
+            time.sleep(args.delay)
+    elif args.command == "click":
+        width, height = (int(v) for v in args.size.split("x"))
+        move = [
+            {"type": "abs", "data": {"axis": "x", "value": args.x * 32767 // (width - 1)}},
+            {"type": "abs", "data": {"axis": "y", "value": args.y * 32767 // (height - 1)}},
+        ]
+        qmp.execute("input-send-event", events=move)
+        time.sleep(0.1)
+        for down in (True, False):
+            qmp.execute("input-send-event", events=[{"type": "btn", "data": {"down": down, "button": "left"}}])
+            time.sleep(0.05)
+    elif args.command == "hmp":
+        print(qmp.hmp(args.line), end="")
+    elif args.command == "quit":
+        qmp.execute("quit")
+
+
+if __name__ == "__main__":
+    main()

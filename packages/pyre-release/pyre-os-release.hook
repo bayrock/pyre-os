@@ -1,0 +1,10 @@
+[Trigger]
+Type = Path
+Operation = Install
+Operation = Upgrade
+Target = usr/lib/pyre/os-release
+
+[Action]
+Description = Linking /etc/os-release to PyreOS identity...
+When = PostTransaction
+Exec = /usr/share/libalpm/scripts/pyre-os-release link

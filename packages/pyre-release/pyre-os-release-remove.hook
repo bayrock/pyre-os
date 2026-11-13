@@ -1,0 +1,9 @@
+[Trigger]
+Type = Path
+Operation = Remove
+Target = usr/lib/pyre/os-release
+
+[Action]
+Description = Restoring Arch /etc/os-release link...
+When = PreTransaction
+Exec = /usr/share/libalpm/scripts/pyre-os-release unlink

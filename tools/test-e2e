@@ -1,0 +1,240 @@
+#!/usr/bin/env bash
+# The P2 and P3 exit scenarios, headless under UEFI (ROADMAP): an offline
+# unattended install, LUKS unlock, login, the daily-interaction desktop
+# checklist with screendumps, a snap-pac pre/post pair, booting that snapshot
+# from Limine, and rolling back to it.
+# Usage: tools/test-e2e [--from STAGE] [ISO]   (default: newest build/out/pyreos-*.iso)
+# Stages: install, first-boot, desktop, snapshot-boot, rollback. --from resumes on the
+# disk a previous run left in build/vm/test-e2e/ (development only).
+# Evidence: build/vm/test-e2e/serial-<stage>.log, desktop-*.png, and a
+# screendump per failure.
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+tool=test-e2e
+name=test-e2e
+# shellcheck source=tools/lib/vmtest.sh
+source "$repo_root/tools/lib/vmtest.sh"
+# The [pyre] server the installed system uses: tools/test-upgrade serves
+# build/ there over HTTP (the guest reaches the host as 10.0.2.2).
+pyre_repo=http://10.0.2.2:8080/repo
+
+from=install
+case "${1:-}" in
+  -h|--help) sed -n '2,8s/^# //p' "${BASH_SOURCE[0]}"; exit 0 ;;
+  --from) from="${2:?--from needs a stage}"; shift 2 ;;
+esac
+case "$from" in install|first-boot|desktop|snapshot-boot|rollback) ;; *) echo "test-e2e: unknown stage: $from" >&2; exit 2 ;; esac
+iso="${1:-}"
+if [[ -z "$iso" ]]; then
+  iso="$(find "$repo_root/build/out" -maxdepth 1 -name 'pyreos-*.iso' -printf '%T@ %p\n' 2>/dev/null |
+    sort -n | tail -n 1 | cut -d' ' -f2-)"
+fi
+[[ -n "$iso" && -f "$iso" ]] || { echo "test-e2e: no ISO found; build one with sudo tools/build-iso" >&2; exit 1; }
+
+stage_install() {
+  install_from_iso "$iso" "pyre_repo = \"$pyre_repo\""
+}
+
+stage_first_boot() {
+  # --- 2. first boot: unlock, log in, check the installed system ----------------
+  start_vm first-boot --boot-disk
+  unlock_and_login
+  expect identity 'grep ^ID= /etc/os-release' '^ID=pyreos$'
+  expect root-subvolume 'findmnt -no SOURCE /' '\[/@\]$'
+  expect subvolumes 'btrfs subvolume list / | grep -c -e " path @$" -e " path @home$" -e " path @log$" -e " path @pkg$" -e " path @snapshots$"' '^5$'
+  expect fstab-no-subvolid 'grep -c subvolid= /etc/fstab || true' '^0$'
+  expect snapper-configs 'snapper list-configs --columns config' '^home'
+  expect timeline-off 'grep ^TIMELINE_CREATE= /etc/snapper/configs/root' 'TIMELINE_CREATE="no"'
+  expect timeline-timer-off 'systemctl is-enabled snapper-timeline.timer || true' '^disabled$'
+  expect initramfs 'grep ^HOOKS= /etc/mkinitcpio.conf' 'sd-encrypt filesystems sd-btrfs-overlayfs'
+  expect zram 'swapon --show=NAME --noheadings' '^/dev/zram0$'
+  expect firewall 'systemctl is-active firewalld' '^active$'
+  expect no-install-snapshots 'snapper -c root list --columns number | tail -n +3 | wc -l' '^1$'
+  expect no-secret-in-logs "grep -rlF -e '$passphrase' -e '$password' /var/log /etc 2>/dev/null | wc -l" '^0$'
+
+  # --- lifecycle state from the installer (P4, ADR 0014) ------------------------
+  expect reconcile-system 'cat /var/lib/pyre/reconcile/system' '^[1-9][0-9]*$'
+  expect reconcile-user 'cat /home/'"$user"'/.local/state/pyre/reconcile/user' '^[1-9][0-9]*$'
+  expect home-snapshot-access 'grep ^ALLOW_GROUPS= /etc/snapper/configs/home' 'wheel'
+  expect cmdline-append 'grep -c "^KERNEL_CMDLINE\[default\]+=" /etc/default/limine' '^1$'
+  # shellcheck disable=SC2016 # typed into the guest verbatim.
+  expect pyre-section 'grep -c "^\[pyre\]" /etc/pacman.conf; sed -n "/^\[pyre\]/,\$p" /etc/pacman.conf | grep -c -e "^SigLevel = Required DatabaseOptional$" -e "^Include = /etc/pacman.d/pyre-mirrorlist$"' '^2$'
+  expect pyre-section-once 'grep -c "^\[pyre\]" /etc/pacman.conf' '^1$'
+  expect pyre-mirror 'cat /etc/pacman.d/pyre-mirrorlist' '^Server = '"$pyre_repo"'$'
+  expect pyre-doctor 'pyre doctor 2>&1 | tail -n 1' '^pyre doctor: no failures$'
+
+  # --- 3. a pacman transaction makes a snap-pac pre/post pair --------------------
+  expect transaction 'pacman -U --noconfirm /var/cache/pacman/pkg/pyre-release-*.pkg.tar.zst >/dev/null && echo done' '^done$'
+  expect snapper-pair 'snapper -c root list --columns type | grep -cwE "pre|post"' '^2$'
+  expect limine-snapshot-entries 'sleep 5; grep -c "^ *///" /boot/limine.conf' '^[1-9]'
+  # Written after the snapshots, so it must vanish when we roll back to them.
+  expect marker 'touch /etc/e2e-after-snapshot && echo marked' '^marked$'
+  power_off
+}
+
+# Probes are typed into the guest verbatim, so $(...) must not expand here.
+# shellcheck disable=SC2016
+stage_desktop() {
+  # --- the daily-interaction checklist (ROADMAP P3) ------------------------------
+  rm -rf -- "$share"
+  start_vm desktop --net --outputs 2 --boot-disk
+  unlock_and_login
+  expect greeter 'systemctl is-active greetd; pgrep -u greeter -f "^/usr/bin/noctalia-greeter$" >/dev/null && echo greeter-running' '^greeter-running$'
+  expect greeter-rendered 'journalctl -b -o cat _UID=$(id -u greeter) | grep -c "presented first frame"' '^[1-9]'
+  expect greeter-no-keyring 'pgrep -u greeter -c gnome-keyring || true' '^0$'
+
+  # Login through noctalia-greeter: the password field has the focus.
+  sleep 3
+  type_keys "$password"$'\n'
+  sleep 15
+  expect session 'pgrep -u '"$user"' -x niri >/dev/null && pgrep -u '"$user"' -x noctalia >/dev/null && echo up' '^up$'
+  session_helpers
+  expect keyring-unlocked 'ls /home/'"$user"'/.local/share/keyrings/' 'login\.keyring'
+  expect login-reconcile 'u systemctl --user show pyre-reconcile.service -p Result --value' '^success$'
+  shot login
+
+  # Config layering: every stub includes the PyreOS defaults (ADR 0013).
+  expect niri-config 'u niri validate 2>&1 | tail -n 1' 'config is valid'
+  expect noctalia-include 'u noctalia msg config-get shell.setup_wizard_enabled' '^false$'
+  expect noctalia-polkit-agent 'u noctalia msg config-get shell.polkit_agent' '^true$'
+  expect foot-include 'u foot --check-config && echo foot-ok' '^foot-ok$'
+  expect bash-include 'u bash -ic "alias ls" 2>/dev/null' 'eza'
+  # A user setting below the include wins over the defaults, live.
+  expect user-override 'printf "%s\n" "layout {" "    gaps 20" "}" >> /home/'"$user"'/.config/niri/config.kdl && sleep 1 && u niri validate 2>&1 | tail -n 1' 'config is valid'
+
+  # Launcher and terminal through the PyreOS keymap (docs/KEYBINDINGS.md).
+  send_keys meta_l-spc
+  sleep 2
+  grep -q '"activePanelId":"launcher"' <<<"$(noctalia_status launcher)" || die "Mod+Space did not open the launcher"
+  pass "Mod+Space opens the launcher"
+  shot launcher
+  send_keys esc
+  sleep 1
+  send_keys meta_l-ret
+  sleep 3
+  expect terminal-keybind 'u niri msg windows | grep "App ID"' '"foot"'
+
+  # Notifications.
+  expect notify 'u notify-send -a "PyreOS e2e" "Notification check" "Sent with notify-send" && sleep 1.5 && u niri msg layers | grep -c noctalia-notification' '^[1-9]'
+  shot notification
+
+  # Clipboard history.
+  expect clipboard 'u bash -c "printf pyre-clipboard-check | wl-copy"; sleep 1; u noctalia msg clipboard-text; echo' '^pyre-clipboard-check$'
+  send_keys meta_l-ctrl-v
+  sleep 2
+  grep -q '"activePanelId":"clipboard"' <<<"$(noctalia_status clipboard)" || die "Mod+Ctrl+V did not open clipboard history"
+  pass "Mod+Ctrl+V opens clipboard history"
+  shot clipboard
+  send_keys esc
+  sleep 1
+
+  # Screenshot through the keymap.
+  local before
+  before="$(probe screenshot-count 'ls /home/'"$user"'/Pictures/Screenshots | wc -l')"
+  send_keys ctrl-print
+  sleep 2
+  expect screenshot-keybind 'ls /home/'"$user"'/Pictures/Screenshots | wc -l' "^$((before + 1))$"
+
+  # Lock and unlock, then lock on idle.
+  send_keys meta_l-alt-l
+  sleep 4
+  grep -q '"locked":true' <<<"$(noctalia_status lock)" || die "Super+Alt+L did not lock"
+  expect locked-hint 'loginctl show-session $(loginctl show-user '"$user"' -p Display --value) -p LockedHint --value' '^yes$'
+  type_keys "$password"$'\n'
+  sleep 4
+  grep -q '"locked":false' <<<"$(noctalia_status unlock)" || die "the password did not unlock"
+  pass "unlock with the password"
+  expect idle-lock 'u noctalia msg config-set idle.behavior.lock.timeout 5 >/dev/null; sleep 14; u noctalia msg status | tr -d "[:space:]"; echo' '"locked":true'
+  type_keys "$password"$'\n'
+  sleep 4
+  expect idle-reset 'u noctalia msg config-set idle.behavior.lock.timeout 600 >/dev/null; u noctalia msg status | tr -d "[:space:]"; echo' '"locked":false'
+
+  # Recording through the screen-cast portal (Mod+Print runs pyre-record).
+  send_keys meta_l-print
+  sleep 6
+  expect portal-dialog 'u niri msg windows | grep "App ID"' 'xdg-desktop-portal-gnome'
+  shot portal
+  click 542 453   # the first monitor
+  sleep 1
+  click 925 189   # Share
+  sleep 3
+  expect recording 'pgrep -u '"$user"' -f "^gpu-screen-recorder " >/dev/null && echo recording' '^recording$'
+  send_keys meta_l-ret
+  sleep 6
+  send_keys meta_l-print
+  sleep 5
+  expect recording-file 'f=$(ls -t /home/'"$user"'/Videos/*.mp4 | head -n 1); ffprobe -v error -show_entries stream=codec_name,width,height -of csv=p=0 "$f" | head -n 1' '^h264,1280,800$'
+
+  # Two outputs, each with a Noctalia bar.
+  expect outputs 'u niri msg outputs | grep -c "Current mode"' '^2$'
+  expect bars 'u niri msg layers | grep -c "noctalia-bar"' '^2$'
+  probe focus-right 'u niri msg action focus-monitor-right' >/dev/null
+  send_keys meta_l-ret
+  sleep 3
+  shot second-output
+  probe focus-left 'u niri msg action focus-monitor-left' >/dev/null
+
+  # Audio, network, power and Bluetooth controls.
+  expect audio-sink 'u wpctl status | grep -A2 "Sinks:" | grep -c "\*"' '^1$'
+  expect volume-osd 'a=$(u wpctl get-volume @DEFAULT_AUDIO_SINK@); u noctalia msg volume-up >/dev/null; sleep 0.5; b=$(u wpctl get-volume @DEFAULT_AUDIO_SINK@); [ "$a" != "$b" ] && echo changed' '^changed$'
+  shot volume
+  expect network 'nmcli -t -f STATE general' '^connected'
+  expect power-profiles 'powerprofilesctl get' '^balanced$'
+  expect bluetooth-service 'systemctl is-enabled bluetooth' '^enabled$'
+  send_keys meta_l-s
+  sleep 2
+  grep -q '"activePanelId":"control-center"' <<<"$(noctalia_status control-center)" || die "Mod+S did not open the control center"
+  pass "Mod+S opens the control center"
+  shot control-center
+  send_keys esc
+
+  expect no-secret-in-logs "grep -rlF -e '$passphrase' -e '$password' /var/log /etc 2>/dev/null | wc -l" '^0$'
+  power_off
+}
+
+stage_snapshot_boot() {
+  # --- 4. boot the newest snapshot from the Limine menu ---------------------------
+  start_vm snapshot-boot --boot-disk
+  wait_for 'BdsDxe: starting' 60 || die "firmware did not start the bootloader"
+  sleep 2
+  # The menu opens on PyreOS > linux. Snapshots is a submenu of snapshot
+  # submenus, newest first, each holding linux and linux-lts (screendump of
+  # 2026-11-08): open Snapshots, open the newest snapshot, boot its linux entry.
+  send_keys down down ret
+  sleep 1
+  send_keys down ret
+  sleep 1
+  send_keys down ret
+  unlock_and_login
+  expect snapshot-cmdline 'cat /proc/cmdline' 'subvol=/?@snapshots/[0-9]+/snapshot'
+  expect marker-absent 'test -e /etc/e2e-after-snapshot && echo present || echo absent' '^absent$'
+  # Restore the booted snapshot with limine-snapper-sync's "replace" method.
+  # Its prompts: "[r] restore | [l] list | [c] cancel", a free-text description
+  # for the backup of the old @, and "Reboot now? [Y/n]". Each prompt wraps
+  # stdin in a new buffered reader and spins on EOF, so the answers arrive one
+  # at a time through a pipe that stays open. It calls stty on the tty, so
+  # timeout must keep it in the foreground. It does not fsync, hence the sync.
+  # shellcheck disable=SC2016 # typed into the guest verbatim.
+  expect restore '{ echo r; sleep 3; echo "e2e rollback backup"; while sleep 3; do echo n; done; } | timeout --foreground 300 limine-snapper-sync --restore; rc=$?; sync; echo; echo rc=$rc' '^rc=0$'
+  power_off
+}
+
+stage_rollback() {
+  # --- 5. boot normally into the rolled-back root ------------------------------------
+  start_vm rolled-back --boot-disk
+  unlock_and_login
+  expect rolled-back-root 'findmnt -no SOURCE /' '\[/@\]$'
+  expect rolled-back-marker 'test -e /etc/e2e-after-snapshot && echo present || echo absent' '^absent$'
+  expect backup-snapshot 'snapper -c root list --columns description' 'e2e rollback backup'
+  power_off
+}
+
+stages=(install first-boot desktop snapshot-boot rollback)
+running=0
+for name_ in "${stages[@]}"; do
+  [[ "$name_" == "$from" ]] && running=1
+  (( running )) || { printf '== %s (skipped)\n' "$name_"; continue; }
+  "stage_${name_//-/_}"
+done
+printf '\ntest-e2e: all stages passed\n'

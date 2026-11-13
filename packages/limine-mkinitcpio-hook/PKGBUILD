@@ -1,0 +1,62 @@
+# Maintainer: PyreOS contributors
+# Vendored from the AUR PKGBUILD by Zesko. The provenance and the PyreOS delta are in UPSTREAM.md.
+_pkgname=limine-entry-tool
+pkgname=limine-mkinitcpio-hook
+pkgver=1.40.0
+pkgrel=1
+pkgdesc='Install kernels for the Limine bootloader'
+arch=(x86_64)
+url='https://gitlab.com/Zesko/limine-entry-tool'
+license=(GPL-3.0-only)
+provides=(limine-entry-tool)
+conflicts=(limine-entry-tool)
+depends=(bash grep tar limine mkinitcpio efibootmgr)
+makedepends=(git gradle)
+optdepends=(
+  'kernel-modules-hook: Safely keeps kernel on upgrade failure'
+  'sbctl: Signs UEFI boot files for Secure Boot when enabled'
+)
+backup=(etc/limine-entry-tool.conf)
+options=(!debug !strip)
+_graalvm_version=graalvm_ce_jdk25
+source=("$_pkgname::git+$url.git#tag=$pkgver"
+        "https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.2.4/graalvm-community-jdk-25i2-25.0.4_linux-x64_bin.tar.gz")
+sha256sums=('267e0496d863b01903d6b99dae8c222a0ec33c4108a8a5d6e9b38eaa4a4a2edf'
+            '3f4a89de8eaa96f2ed677f09957c7e872cd8467aad3537f8b5394c1b8c4b942e')
+
+prepare() {
+  rm -rf -- "$_graalvm_version"
+  mv graalvm-community-*/ "$_graalvm_version"
+  [[ -x "$_graalvm_version/bin/javac" ]] || { echo "$_graalvm_version/bin/javac not found" >&2; return 1; }
+}
+
+build() {
+  cd "$srcdir/$_pkgname" || return 1
+  export GRAALVM_HOME="$srcdir/$_graalvm_version"
+  export JAVA_HOME="$GRAALVM_HOME"
+  export NATIVE_IMAGE_OPTIONS='-march=compatibility --future-defaults=all'
+  /usr/bin/gradle clean nativeCompile -Dorg.gradle.java.home="$JAVA_HOME"
+}
+
+package() {
+  cd "$srcdir/$_pkgname" || return 1
+  local src=install/arch-linux
+
+  install -dm755 \
+    "$pkgdir/usr/share/doc/$_pkgname" \
+    "$pkgdir/etc/boot/hooks/pre.d" \
+    "$pkgdir/etc/boot/hooks/post.d" \
+    "$pkgdir/usr/lib/limine"
+  install -Dm644 README.md CHANGELOG.md -t "$pkgdir/usr/share/doc/$_pkgname/"
+
+  cp -a "$src/limine-entry-tool/etc" "$src/limine-entry-tool/usr" "$pkgdir/"
+  cp -a "$src/limine-mkinitcpio-hook/etc" "$src/limine-mkinitcpio-hook/usr" "$pkgdir/"
+  install -Dm755 build/native/nativeCompile/limine-entry-tool "$pkgdir/usr/lib/limine/"
+
+  ln -sf /usr/bin/limine-reset-enroll "$pkgdir/etc/boot/hooks/pre.d/10-limine-reset-enroll"
+  ln -sf /usr/bin/limine-enroll-config "$pkgdir/etc/boot/hooks/post.d/90-limine-enroll-config"
+
+  # PyreOS: packages must not own files in /usr/local. The upstream wrapper only warns
+  # interactive users that plain `mkinitcpio -P` does not update Limine entries.
+  rm -rf -- "${pkgdir:?}/usr/local"
+}

@@ -1,0 +1,37 @@
+# shellcheck shell=bash disable=SC2034 # since and fresh are read by the engine
+# about: add the PyreOS config stubs missing from your home (ADR 0013)
+# Copies each /etc/skel/.config file you do not have yet, and replaces
+# ~/.bashrc only while it is still bash's untouched /etc/skel copy. Existing
+# files are never changed. pyre-install runs this for the first user, and
+# pyre-reconcile.service runs it for users created later.
+since=1
+
+skel="$PYRE_ROOT/etc/skel"
+bashrc_stub="$PYRE_ROOT/usr/share/pyre/defaults/bash/bashrc"
+
+missing_stubs() {
+  local file
+  [[ -d "$skel/.config" ]] || return 0
+  while IFS= read -r -d '' file; do
+    [[ -e "$HOME/.config/$file" ]] || printf '%s\n' "$file"
+  done < <(cd -- "$skel/.config" && find . -type f -printf '%P\0')
+}
+
+stock_bashrc() {
+  [[ -f "$bashrc_stub" ]] || return 1
+  [[ ! -e "$HOME/.bashrc" ]] || cmp -s -- "$HOME/.bashrc" "$skel/.bashrc"
+}
+
+check() {
+  [[ -z "$(missing_stubs)" ]] && ! stock_bashrc
+}
+
+apply() {
+  local file
+  while IFS= read -r file; do
+    install -D -m 644 -- "$skel/.config/$file" "$HOME/.config/$file"
+  done < <(missing_stubs)
+  if stock_bashrc; then
+    install -m 644 -- "$bashrc_stub" "$HOME/.bashrc"
+  fi
+}

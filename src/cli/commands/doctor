@@ -1,0 +1,101 @@
+# shellcheck shell=bash disable=SC2015 # "test && ok || bad": ok and note always succeed
+# help: check that kernels, boot entries, snapshots and PyreOS state agree
+# usage: pyre doctor [--boot]
+#   --boot   only the boot checks (pyre update runs these)
+# Exits 1 when a check fails; warnings do not fail.
+
+doctor_fail=0
+
+ok() { printf '  ok    %s\n' "$*"; }
+bad() { printf '  FAIL  %s\n' "$*"; doctor_fail=1; }
+note() { printf '  warn  %s\n' "$*"; }
+
+# The kernels the system has: each modules directory names its pkgbase.
+installed_kernels() {
+  local base
+  for base in "$PYRE_ROOT"/usr/lib/modules/*/pkgbase; do
+    [[ -f "$base" ]] && printf '%s %s\n' "$(<"$base")" "$(basename -- "$(dirname -- "$base")")"
+  done
+}
+
+# entry_files KERNEL CONF: "path hash" for the kernel and initramfs of the
+# kernel's boot entry. limine-entry-tool copies them to the ESP as
+# /<machine-id>/<kernel>/{vmlinuz,initramfs} and pins each by its BLAKE2b hash.
+entry_files() {
+  sed -n "s,^ *[a-z_]*path: boot():\(/[^#]*/$1/\(vmlinuz\|initramfs\)\)#\([0-9a-f]*\)$,\1 \3,p" <<<"$2"
+}
+
+doctor_boot() {
+  local kernel version entries cmdline_file="$PYRE_ROOT/etc/default/limine" use path hash files sum
+  step "Boot"
+  entries="$(as_root cat "$PYRE_ROOT/boot/limine.conf" 2>/dev/null)" || entries=""
+  [[ -n "$entries" ]] && ok "limine.conf is present" || bad "no /boot/limine.conf"
+  while read -r kernel version; do
+    files="$(entry_files "$kernel" "$entries")"
+    if [[ "$(wc -l <<<"$files")" -ne 2 || -z "$files" ]]; then
+      bad "$kernel $version: no boot entry with a kernel and initramfs (run: sudo limine-update)"
+      continue
+    fi
+    while read -r path hash; do
+      sum="$(as_root b2sum -- "$PYRE_ROOT/boot$path" 2>/dev/null | cut -d' ' -f1)" || sum=""
+      if [[ -z "$sum" ]]; then
+        bad "$kernel: $path is missing from the ESP (run: sudo limine-update)"
+      elif [[ "$sum" != "$hash" ]]; then
+        bad "$kernel: $path does not match its hash in limine.conf, so Limine would refuse it (run: sudo limine-update)"
+      fi
+    done <<<"$files"
+    [[ "$doctor_fail" == 1 ]] || ok "$kernel $version: boot entry, kernel and initramfs match"
+  done < <(installed_kernels)
+  if grep -qE '^KERNEL_CMDLINE\[default\]=' "$cmdline_file" 2>/dev/null; then
+    note "/etc/default/limine sets KERNEL_CMDLINE[default] with \"=\", which drops drop-in arguments; use \"+=\" (ADR 0014)"
+  fi
+  use="$(df --output=pcent "$PYRE_ROOT/boot" 2>/dev/null | tail -n 1 | tr -dc '0-9')"
+  if [[ -n "$use" ]]; then
+    (( use < 85 )) && ok "ESP ${use}% used" || note "ESP ${use}% used; limine-snapper-sync prunes snapshot entries above 85%"
+  fi
+}
+
+doctor_state() {
+  local scope state latest recorded file count
+  step "Snapshots"
+  for scope in root home; do
+    [[ -f "$PYRE_ROOT/etc/snapper/configs/$scope" ]] && ok "snapper config $scope" || bad "no snapper config $scope"
+  done
+  [[ -n "$(booted_snapshot)" ]] && note "booted from snapshot $(booted_snapshot); run pyre rollback to keep it"
+
+  step "Reconcile"
+  # shellcheck source=src/cli/lib/reconcile.sh
+  source "$PYRE_LIB/lib/reconcile.sh"
+  for scope in system user; do
+    if [[ "$scope" == system ]]; then state="$PYRE_ROOT/var/lib/pyre/reconcile/system"; else
+      state="${XDG_STATE_HOME:-$HOME/.local/state}/pyre/reconcile/user"; fi
+    latest="$(reconcile_latest "$scope")"
+    recorded="$(reconcile_read "$state")"
+    if [[ "$recorded" == "$latest" ]]; then ok "$scope state at version $latest"; else
+      note "$scope state at version ${recorded:-none}, units at $latest (run: pyre reconcile --$scope)"; fi
+  done
+
+  step "Files to review"
+  count="$(find "$PYRE_ROOT/etc" -name '*.pacnew' 2>/dev/null | wc -l)"
+  (( count == 0 )) && ok "no .pacnew files in /etc" || note "$count .pacnew files in /etc (pacdiff from pacman-contrib merges them)"
+  while IFS= read -r file; do
+    note "PyreOS suggests a change: diff ${file%.pyre-new} $file"
+  done < <(find "$HOME/.config" -name '*.pyre-new' 2>/dev/null)
+
+  step "Services"
+  count="$(systemctl --failed --no-legend 2>/dev/null | wc -l)"
+  (( count == 0 )) && ok "no failed system units" || bad "$count failed system units (systemctl --failed)"
+  grep -q '^\[pyre\]' "$PYRE_ROOT/etc/pacman.conf" 2>/dev/null && ok "[pyre] repository configured" ||
+    note "no [pyre] repository: PyreOS packages do not update (ADR 0014)"
+}
+
+cmd_doctor() {
+  case "${1:-}" in
+    "") doctor_boot; doctor_state ;;
+    --boot) doctor_boot ;;
+    -h | --help) command_usage "${BASH_SOURCE[0]}"; return 0 ;;
+    *) die "doctor: unknown option $1" ;;
+  esac
+  printf '\n'
+  (( doctor_fail == 0 )) && printf 'pyre doctor: no failures\n' || { printf 'pyre doctor: failures above\n'; return 1; }
+}

@@ -1,0 +1,13 @@
+# shellcheck shell=bash
+# help: list the commands, or show one command's options
+# usage: pyre help [command]
+
+cmd_help() {
+  if [[ -n "${1:-}" ]]; then
+    [[ "$1" =~ ^[a-z][a-z-]*$ && -f "$PYRE_LIB/commands/$1" ]] || die "unknown command: $1"
+    printf '%s\n\n' "$(command_meta "$PYRE_LIB/commands/$1" help)"
+    command_usage "$PYRE_LIB/commands/$1"
+    return 0
+  fi
+  command_list
+}

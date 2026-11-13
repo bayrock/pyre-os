@@ -1,0 +1,90 @@
+// PyreOS defaults for niri (ADR 0013). Package-owned: do not edit.
+// ~/.config/niri/config.kdl includes this file first, so anything you set
+// after the include line overrides it. See docs/KEYBINDINGS.md for the keys.
+
+input {
+    keyboard {
+        // Empty: niri takes the layout from systemd-localed (localectl).
+        xkb {
+        }
+        numlock
+    }
+    touchpad {
+        tap
+        natural-scroll
+    }
+}
+
+layout {
+    gaps 12
+    center-focused-column "never"
+    preset-column-widths {
+        proportion 0.33333
+        proportion 0.5
+        proportion 0.66667
+    }
+    default-column-width { proportion 0.5; }
+    focus-ring {
+        width 3
+        active-color "#ff8a3d"
+        inactive-color "#4a4038"
+    }
+    border {
+        off
+    }
+    shadow {
+        on
+        softness 30
+        spread 5
+        offset x=0 y=5
+        color "#0007"
+    }
+}
+
+// Apps that support it let niri draw the window frame (focus ring), not a title bar.
+prefer-no-csd
+
+screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
+
+hotkey-overlay {
+    skip-at-startup
+}
+
+environment {
+    // Electron and Chromium apps use Wayland when it is available.
+    ELECTRON_OZONE_PLATFORM_HINT "auto"
+}
+
+// The shell: bar, launcher, notifications, lock, idle and the polkit agent.
+spawn-at-startup "noctalia"
+
+window-rule {
+    geometry-corner-radius 10
+    clip-to-geometry true
+}
+
+window-rule {
+    match app-id=r#"firefox$"# title="^Picture-in-Picture$"
+    open-floating true
+}
+
+// Noctalia's settings window floats (Noctalia's niri guide).
+window-rule {
+    match app-id="dev.noctalia.Noctalia"
+    open-floating true
+    default-column-width { fixed 1080; }
+    default-window-height { fixed 920; }
+}
+
+// Portal dialogs, such as the screen-share picker, float.
+window-rule {
+    match app-id=r#"^xdg-desktop-portal"#
+    open-floating true
+}
+
+debug {
+    // Lets Noctalia notification actions activate their windows.
+    honor-xdg-activation-with-invalid-serial
+}
+
+include "binds.kdl"

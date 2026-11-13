@@ -1,0 +1,26 @@
+# shellcheck shell=bash
+# help: take or list snapshots of the system and your home
+# usage: pyre snapshot [list | create [DESCRIPTION]]
+#   list          the root and home snapshots (default)
+#   create [D]    a root and a home snapshot now, kept until number cleanup
+
+cmd_snapshot() {
+  local action="${1:-list}" desc
+  case "$action" in
+    list)
+      step "System (root)"
+      as_root snapper -c root list
+      step "Home"
+      snapper -c home list
+      ;;
+    create)
+      desc="${2:-pyre snapshot}"
+      as_root snapper -c root create --cleanup-algorithm number --description "$desc" --print-number |
+        sed 's/^/  -> root snapshot /'
+      snapper -c home create --cleanup-algorithm number --description "$desc" --print-number |
+        sed 's/^/  -> home snapshot /'
+      ;;
+    -h | --help) command_usage "${BASH_SOURCE[0]}" ;;
+    *) die "snapshot: unknown action $action" ;;
+  esac
+}

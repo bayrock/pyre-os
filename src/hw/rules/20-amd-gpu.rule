@@ -1,0 +1,4 @@
+# AMD GPUs: Mesa drives them; Vulkan needs RADV. VA-API is part of mesa.
+match_pci_vendor = 1002
+match_pci_class = 0300 0302 0380
+packages = vulkan-radeon

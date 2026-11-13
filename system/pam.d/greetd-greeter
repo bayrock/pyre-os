@@ -1,0 +1,11 @@
+#%PAM-1.0
+# PyreOS (ADR 0013): the PAM service greetd uses for the greeter's own
+# session. It matches greetd's stock /etc/pam.d/greetd without the
+# gnome-keyring lines pyre-install adds there, so the greeter user never
+# starts a keyring daemon. /etc/pam.d/greetd-greeter overrides this file.
+
+auth       required     pam_securetty.so
+auth       requisite    pam_nologin.so
+auth       include      system-local-login
+account    include      system-local-login
+session    include      system-local-login

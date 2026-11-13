@@ -1,0 +1,23 @@
+# shellcheck shell=bash disable=SC2034 # since and fresh are read by the engine
+# about: let wheel users take home snapshots (pyre update, user reconcile)
+# Installs before pyre-cli created the home config without ALLOW_GROUPS, so
+# users could not snapshot their own home. The installer now sets it too.
+since=1
+
+conf="$PYRE_ROOT/etc/snapper/configs/home"
+
+home_groups() {
+  sed -n 's/^ALLOW_GROUPS="\(.*\)"$/\1/p' "$conf"
+}
+
+check() {
+  [[ -f "$conf" ]] || return 0
+  [[ " $(home_groups) " == *" wheel "* ]] && grep -qx 'SYNC_ACL="yes"' "$conf"
+}
+
+apply() {
+  local groups
+  groups="$(home_groups)"
+  [[ " $groups " == *" wheel "* ]] || groups="${groups:+$groups }wheel"
+  snapper --no-dbus -c home set-config "ALLOW_GROUPS=$groups" SYNC_ACL=yes
+}

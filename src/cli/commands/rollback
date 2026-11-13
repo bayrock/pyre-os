@@ -1,0 +1,70 @@
+# shellcheck shell=bash
+# help: roll the system or your home back to a snapshot
+# usage: pyre rollback [--yes]   |   pyre rollback --home N [--yes]
+#   (no option)   booted from a snapshot: make it the system again;
+#                 booted normally: list snapshots and how to boot one
+#   --home N      undo the changes to your home since home snapshot N
+#   --yes         do not ask for confirmation
+
+rollback_list() {
+  step "System snapshots (newest last)"
+  as_root snapper -c root list --columns number,type,date,description,userdata
+  step "Home snapshots"
+  snapper -c home list --columns number,type,date,description 2>/dev/null ||
+    warn "cannot list home snapshots (are you in the wheel group?)"
+  cat <<'EOF'
+
+A "pre" snapshot is the system just before the pacman transaction in its
+description; rolling back to it undoes that transaction and everything after.
+
+To roll the system back:
+  1. Reboot, and pick PyreOS > Snapshots > <number> > linux in the boot menu.
+  2. Log in and check that the snapshot works.
+  3. Run: pyre rollback
+Your current root is kept as a backup snapshot. Home is not affected.
+EOF
+}
+
+rollback_system() {
+  local yes="$1" number
+  number="$(booted_snapshot)"
+  if [[ -z "$number" ]]; then
+    rollback_list
+    return 0
+  fi
+  printf 'Booted from root snapshot %s. Rolling back makes it the system again;\n' "$number"
+  printf 'the current root is kept as a backup snapshot, and home is not affected.\n'
+  [[ "$yes" == 1 ]] || confirm "Roll back to snapshot $number?" || die "not rolled back"
+  # limine-snapper-sync asks for the restore and a backup description itself.
+  exec sudo -- limine-snapper-sync --restore
+}
+
+rollback_home() {
+  local number="$1" yes="$2" changes
+  [[ "$number" =~ ^[0-9]+$ ]] || die "rollback --home needs a snapshot number (see pyre snapshot list)"
+  changes="$(snapper -c home status "$number..0" | wc -l)" || die "no home snapshot $number"
+  printf '%s files in your home changed since home snapshot %s.\n' "$changes" "$number"
+  [[ "$yes" == 1 ]] || confirm "Undo those changes?" || die "not rolled back"
+  snapper -c home create --cleanup-algorithm number --description "pyre: before home rollback to $number" >/dev/null ||
+    warn "could not snapshot home first"
+  snapper -c home undochange "$number..0"
+}
+
+cmd_rollback() {
+  local home="" yes=0
+  while (( $# )); do
+    case "$1" in
+      --home) home="${2:-}"; shift ;;
+      --yes) yes=1 ;;
+      list) rollback_list; return 0 ;;
+      -h | --help) command_usage "${BASH_SOURCE[0]}"; return 0 ;;
+      *) die "rollback: unknown option $1" ;;
+    esac
+    shift
+  done
+  if [[ -n "$home" ]]; then
+    rollback_home "$home" "$yes"
+  else
+    rollback_system "$yes"
+  fi
+}
