@@ -1,16 +1,13 @@
 # Handoff
 
-## Next task: P4 sign-off, then the testing channel and P5
+## Next task: the hosted testing channel, then P5
 
-The P4 exit runs passed on 2026-11-13 (STATUS has the evidence).
-
-1. Get the user's sign-off on P4, then mark it accepted in ROADMAP and STATUS: keep the evidence in a few lines and drop the progress table.
-2. Not covered by the VM: real NVIDIA, AMD and Intel GPUs for `pyre hw` (P6 hardware), and the `-gaming` and `-lazyvim` bundles.
-3. **Hosting is decided:** the repository goes public (user, 2026-11-12), and the testing channel will be a GitHub Release on it. It needs:
-   - the user to make the repository public in GitHub settings
-   - a release signing key with a CI-held subkey, which the user creates and stores as an Actions secret (ADR 0009)
-   - then a CI job that builds, signs and uploads `[pyre]`, and a `pyre-release` mirrorlist that points at the release
-4. **Before announcing anything:** replace the releng boot splash (`iso/syslinux/splash.png`), which is Arch artwork. The menu text already says PyreOS. The artwork is P5.
+1. **The release key** (ADR 0009). The user creates it, and the private parts never pass through the agent:
+   - an offline primary key, with an ed25519 signing subkey that is exported alone
+   - the subkey goes in the Actions secret `PYRE_SIGNING_SUBKEY`, and the public key is committed
+   - `pyre-keyring` then trusts the release key alongside the dev key; release images will drop the dev key in P7
+2. **CI publishing:** on pushes to `main`, build every package, sign it and the database with the subkey, and upload them to a GitHub Release named `testing`. Then `pyre-release`'s mirrorlist points at `https://github.com/bayrock/pyre-os/releases/download/testing`. Verify a VM can `pyre update` from it.
+3. **P5 (ROADMAP):** `palette.toml`, matugen templates, `pyre theme`, the "Ember" theme, and branding (Limine, Plymouth, the greeter, wallpapers, and the boot splash, which is still Arch artwork).
 
 ## Dev loop reference
 

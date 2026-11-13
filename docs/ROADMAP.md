@@ -33,7 +33,7 @@ Phases run in order. A phase is accepted only when its exit criteria pass with e
 - Layer configs by include, and check every include mechanism actually works.
 - **Exit when:** the daily-interaction checklist passes in the VM, backed by screendump evidence. The checklist covers login, launcher, notifications, lock/idle, screenshot, recording, screen-share portal, clipboard, multi-output, and audio/network/Bluetooth controls.
 
-## P4: Lifecycle (active)
+## P4: Lifecycle (accepted 2026-11-13)
 
 - Build the `pyre` CLI: `update`, `snapshot`, `rollback`, `doctor`, and `install`/`remove <bundle>`.
 - Build the reconcile engine with system and user scopes, plus home snapshots.
@@ -44,7 +44,7 @@ Phases run in order. A phase is accepted only when its exit criteria pass with e
   - every reconcile unit's test shows that a second run is a no-op
   - a deliberately broken update can be rolled back to a working desktop
 
-## P5: Polish and identity
+## P5: Polish and identity (next)
 
 - Build the theme system: `palette.toml`, matugen templates, and `pyre theme`.
 - Ship the "Ember" default theme plus curated alternatives.

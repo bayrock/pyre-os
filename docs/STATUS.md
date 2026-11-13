@@ -1,45 +1,10 @@
 # Status
 
-Last updated: 2026-11-10
+Last updated: 2026-11-13
 
 ## Current phase
 
-**P4: Lifecycle.** The exit runs passed on 2026-11-13. Acceptance waits for the user.
-
-**P4 exit evidence** (ISO `pyreos-2026.11.13-x86_64.iso`, sha256 `28851945…3d34a813`, offline repository of 633 packages / 2.0 GB):
-
-- **`tools/test-upgrade`: all stages, 50 checks, in 10 min 18 s.** It installed release N-1 offline from the ISO. `pyre update` then took it to release N, built from the tree with `pkgrel+1` and a canary unit per scope:
-  - **On N:** both canaries ran, the home snapshot and a snap-pac pair were taken, a second `pyre reconcile --system` was a no-op, and `pyre doctor` reported no failures.
-  - **Desktop:** after a reboot the greeter and session came up, and the login reconcile service succeeded.
-  - **Broken update:** `pyre update` to N+1 made the greeter fail to render.
-  - **Recovery:** the pre-update snapshot booted from Limine with a working greeter, and `pyre rollback` restored it.
-  - **Back on N:** a normal boot reached the desktop at release N, and `pyre doctor` was clean.
-- **`tools/test-e2e`: all stages, 84 checks, in 9 min 17 s.** This adds the P4 lifecycle checks: reconcile versions, home snapshot access, `KERNEL_CMDLINE +=`, a single strict `[pyre]` section, `[core]` resolving to an https mirror, and `pyre doctor`.
-- **`tools/test-iso`:** passed on UEFI (40 s) and BIOS (36 s).
-- **Unit tests:** every reconcile unit has a bats test that runs it twice (`tests/reconcile-units.bats`), as do the engine, `doctor`, `hw` and bundles. CI is green.
-
-| Step | State |
-|---|---|
-| ADR 0014: CLI layout, reconcile units and versions, the installed `[pyre]` repository | done |
-| `pyre-cli` 0.1.0: `update`, `snapshot`, `rollback`, `doctor`, `reconcile`, `hw`, `install`/`remove`, `help`; the ALPM hook and the login service | built; bats tests for the engine, units, doctor, hw and bundles |
-| Reconcile units: system `001-snapper-home-access`, user `001-home-stubs` | each unit's test runs it twice |
-| `pyre hw`: NVIDIA (open and pre-Turing), AMD and Intel rules as data | bats with a fake sysfs; no NVIDIA hardware in the VM, so real GPUs come in P6 |
-| Bundles `pyre-bundle-dev`, `-media`, `-office` | built; `-gaming` waits on `[multilib]` and `-lazyvim` on a per-user checkout |
-| `pyre-installer` 0.3.0: `pyre_repo`, `[pyre]` in `pacman.conf`, `KERNEL_CMDLINE +=`, home snapshot access, hardware rules, user reconcile | `test-e2e` passes from a network install, with the new lifecycle checks |
-| `build-pkgs` signs packages and the database with the dev key | done |
-| `tools/test-upgrade`: N-1 to N, then a broken update rolled back | passes from a network install (2026-11-10): `pyre update` to N runs both canary units, takes a home snapshot and a snap-pac pair, and a second reconcile is a no-op; after the broken N+1, the pre snapshot boots from Limine, `pyre rollback` restores it, and a normal boot reaches the desktop at N |
-| Final evidence from a rebuilt ISO | done 2026-11-13 (above); the first rebuild's `test-upgrade` found the offline `pacman.conf` bug below |
-| Testing channel hosting | needs the user: the GitHub repo is private |
-
-**Found and fixed while testing:**
-
-- The live medium's `[pyre]` section reached the target's `pacman.conf`. The offline ISO's points at `/opt/pyre-offline`, which would break `pacman -Syu`. The installer now drops any inherited `[pyre]` section first.
-- A snapshot boots under an overlay, so `/` shows `overlay`. `pyre rollback` now reads the snapshot number from the kernel command line.
-- `pyre doctor` checks each Limine entry's kernel and initramfs against the hashes in `limine.conf`, not `/boot/vmlinuz-*`.
-- **Offline installs could never update.** archinstall copies the live `/etc/pacman.conf` into the target (`PacmanConfig.persist`, archinstall 4.5), and for an offline install that is the config pointing `[core]` and `[extra]` at the ISO's `/opt/pyre-offline`. Every `pacman -Syu` on such a system failed. The P2 and P3 tests never synced from an installed system, so they missed it, and `test-upgrade` caught it on the first ISO run. `pyre-install` now saves the live medium's original `pacman.conf` and restores it into the target, and dies if the target still names the offline repository. `test-e2e` checks it too.
-- CI's `check` job failed on every push from the P3 commit on: the bare `archlinux:latest` container lacks `diffutils`, so the tests' `cmp` calls failed. The workflow now installs it, and `pyre-cli` depends on it, because its user unit uses `cmp` too. CI job logs need a token even on a public repo, so the cause was found by reproducing the container's package set.
-- The ISO build failed once the dev key signed `[pyre]`, because the build host's keyring does not know that key. The build-time `file://` repository is now `SigLevel = Never`; the live and installed systems still verify with `pyre-keyring`.
-- Test harness: probe output now bypasses the terminal, so pacman prints no color codes. A hard kill loses unflushed writes, so tests never rely on files written just before one.
+**Between P4 and P5.** P4 was accepted on 2026-11-13. Next: the hosted testing channel (CI publishing with a release signing subkey), then P5, polish and identity.
 
 **Carried over** (later phases unless reprioritized):
 
@@ -49,8 +14,30 @@ Last updated: 2026-11-10
 - **Sizes:** the ESP is 2 GiB, while limine-snapper-sync recommends 4 GiB (entries are pruned at 85% usage). The ISO is now 3.0 GB, 1.4 GB of it the offline repo.
 - **limine-snapper-sync 1.32.1 rough edges** (worth reporting upstream): each prompt wraps stdin in a new buffered reader and spins on EOF; it calls `stty` on `/dev/tty`, so it stops outside the foreground process group; it writes the backup's `info.xml` without fsync, so a power cut right after a restore leaves an orphaned backup.
 - **From P3:** users created after install get bash's own `.bashrc` (P4 user reconcile, ADR 0013); with autologin the keyring stays locked until first use.
+- **From P4:** `pyre hw` has run only against a simulated sysfs, so real GPUs wait for P6. The `-gaming` and `-lazyvim` bundles are deferred. `[pyre]` is not hosted yet: CI publishing needs a release signing subkey from the user.
 
 ## Accepted phases
+
+**P4: Lifecycle** was accepted on 2026-11-13.
+
+- **Exit run** (ISO `pyreos-2026.11.13-x86_64.iso`, sha256 `28851945…3d34a813`):
+  - **`tools/test-upgrade`:** 50 checks in 10 min 18 s. An offline install (release N-1) updated to N with `pyre update`: both canary reconcile units ran, home and snap-pac snapshots were taken, the second reconcile was a no-op, `doctor` was clean, and the desktop came back. A deliberately broken N+1 lost its greeter; the pre-update snapshot booted from Limine, `pyre rollback` restored it, and a normal boot reached the desktop at N.
+  - **`tools/test-e2e`:** 84 checks in 9 min 17 s. **`tools/test-iso`:** passed on UEFI and BIOS.
+  - **Unit tests:** every reconcile unit has a bats test that runs it twice. CI is green.
+- **Built:**
+  - ADR 0014
+  - `pyre-cli` 0.1.0: `update`, `snapshot`, `rollback`, `doctor`, `reconcile`, `hw`, `install`/`remove`; the ALPM hook and the login service
+  - hardware rules for NVIDIA, AMD and Intel
+  - the bundles `-dev`, `-media` and `-office`
+  - `pyre-installer` 0.3.0, with `[pyre]` and the restored `pacman.conf`
+  - dev-key signing in `build-pkgs`
+  - `tools/test-upgrade` and `tools/lib/vmtest.sh`
+- **Found by the tests:**
+  - offline installs kept the ISO's `pacman.conf`, so they could never update
+  - the live `[pyre]` section leaked into the target
+  - `pyre rollback` missed overlay snapshot boots
+  - the ISO build reused stale cached packages
+  - CI lacked `diffutils`
 
 **P3: Desktop core** was accepted on 2026-11-10. The user signed off on the two limits of the VM evidence.
 
@@ -136,5 +123,5 @@ Last updated: 2026-11-10
 
 Each question is listed under the phase that resolves it.
 
-- **P4:** where the testing channel is hosted and who holds the signing subkey (needs the user).
+- **Testing channel:** the user creates the release key and its CI signing subkey (ADR 0009).
 - **P7:** whether the "PyreOS" trademark and domains are available.
