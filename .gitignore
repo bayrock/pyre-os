@@ -29,3 +29,6 @@
 
 # Python bytecode from dev tools
 __pycache__/
+
+# Claude Code session worktrees (local only)
+/.claude/worktrees/
