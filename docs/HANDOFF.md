@@ -2,15 +2,9 @@
 
 ## Next task: P6, the migration (the next steps need the machine's owner)
 
-Everything P6 can prove in a VM is built and passing (STATUS has the table). What is left touches the host's disks and firmware, so **the owner runs it** and the agent prepares, tests in VMs, and fixes what the machine shows.
+Everything P6 can prove in a VM is built and passing on the ISO that will be installed (STATUS has the table). What is left touches the host's disks and firmware, so **the owner runs it** and the agent prepares, tests in VMs, and fixes what the machine shows.
 
-1. **Owner: rebuild the ISO**, so it carries `pyre-installer` 0.4.0, `pyre-cli` 0.3.1, `pyre-desktop` 0.3.2 and `pyre-base` 0.5.1:
-
-   ```sh
-   tools/build-pkgs && sudo tools/build-iso
-   ```
-
-   Then anyone runs the VM tests on it, without `--local-packages`: `tools/test-iso`, `tools/test-machine`, `tools/test-nvidia`, `tools/test-e2e`. Record the results in STATUS.
+1. **Done on 2026-11-14:** the ISO is rebuilt and verified (`build/out/pyreos-2026.11.14-x86_64.iso`, sha256 in STATUS), and `tools/test-iso`, `test-e2e`, `test-machine` and `test-nvidia` pass on it. If a package changes before the install, rebuild (`tools/build-pkgs && sudo tools/build-iso`) and run the four again.
 2. **Owner: the safety net and the install**, step by step in `docs/reference/migration.md`: the home archive, the whole-disk image, the USB stick started through its **"UEFI:"** entry (the machine boots in BIOS mode today), then `pyre-install` onto the 120 GB SSD with autologin and hibernation.
 3. **On the installed machine:** `tools/hw-report`, then the overlay (`../pyre-overlay`, `./install`). Check what only hardware shows: the output names, 240 Hz and VRR, suspend and hibernate, Bluetooth, the USB audio, the bar on the portrait screen, the Windows entry.
 4. **Fix what the machine shows.** Log each issue in STATUS's P6 table; critical ones block the exit.

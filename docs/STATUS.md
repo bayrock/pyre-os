@@ -4,7 +4,7 @@ Last updated: 2026-11-14
 
 ## Current phase
 
-**P6, daily driver on the development machine (active).** Everything about the machine that needs no real hardware is built and passes in VMs. What remains needs the machine itself and its owner: an ISO rebuild (sudo), the backups, and the install (`docs/reference/migration.md`).
+**P6, daily driver on the development machine (active).** Everything about the machine that needs no real hardware is built and passes in VMs, on the ISO that will be installed. What remains needs the machine itself and its owner: the backups and the install (`docs/reference/migration.md`).
 
 | Step | State | Evidence |
 |---|---|---|
@@ -17,17 +17,19 @@ Last updated: 2026-11-14
 | Autologin keyring (ADR 0018) | Done in the VM | no dialog, `secret-tool` round trip, power-off in seconds |
 | NVIDIA install path | Done in the VM, without the GPU | `tools/test-nvidia`: the rule's packages from the offline repository, DKMS for both kernels in the installer's chroot, the modules in both initramfs images, a normal boot |
 | `pyre hw` on the real GPU | Detection only | read-only on the machine: the RTX 3060 Ti matches `10-nvidia-open` |
-| An ISO with the new packages | **Needs the owner**: two builds on 2026-11-14 failed (no disk space; one damaged package, below) | `sudo tools/build-iso`; until then the VM tests take `--local-packages` |
+| An ISO with the new packages | Done: `pyreos-2026.11.14-x86_64.iso`, sha256 `0ff3ef15…64064568` | built and verified by `tools/build-iso` (the third build of the day; see below), and the four VM tests below |
 | The author's overlay | Scaffolded, untested on the machine | a local repository outside this one (`../pyre-overlay`): outputs, keys, foot, mpv, package lists |
 | Real hardware: driver under niri, 240 Hz and VRR, sleep, Bluetooth, audio, peripherals | Waits for the install | `tools/hw-report` collects it in one run |
 | Migration, then a week of daily use | Waits for the owner | the exit criterion |
 
-**P6 runs** (2026-11-14, ISO `pyreos-2026.11.14-x86_64.iso` with `--local-packages`: `pyre-installer` 0.4.0, `pyre-cli` 0.3.1, `pyre-desktop` 0.3.2, `pyre-base` 0.5.1):
+**P6 runs** (2026-11-14, on the rebuilt ISO itself, with `pyre-installer` 0.4.0, `pyre-cli` 0.3.1, `pyre-desktop` 0.3.2 and `pyre-base` 0.5.1; the same tests had passed before the rebuild with `--local-packages`):
 
-- **`tools/test-machine`:** all four stages, 75 checks in 7 min 14 s. The interactive installer, typed at the keyboard, onto a disk that held an MBR table, FAT and LUKS, next to a stand-in Windows disk; then every row marked "Done in the VM" above. The desktop powered off in 4 s.
-- **`tools/test-nvidia`:** both stages, 21 checks in 10 min 42 s. The installer applied the NVIDIA rule with no failed hook and no snapshots; DKMS built `nvidia-open` 620.70.06 for both kernels; each initramfs holds the four modules; the system boots and unlocks; a second apply changes nothing, and an apply without the GPU removes the drop-ins.
-- **`tools/test-e2e`:** every stage, 96 checks. The first run stopped at the snapshot stage's first probe, on a doubled character in the serial log (below); `--from snapshot-boot` passed that stage and the rollback.
-- **CI** on the push of these changes (`1831425`): `check`, `packages` and `publish` succeeded, so the testing channel carries the four new versions.
+- **`tools/build-iso`** ended with `tools/verify-iso`: the root image matches its recorded checksum, and the offline repository in the image is file for file what was staged.
+- **`tools/test-iso`:** passed on UEFI and BIOS.
+- **`tools/test-e2e`:** every stage, 94 checks in 9 min 25 s.
+- **`tools/test-machine`:** all four stages, 74 checks in 7 min 41 s. The interactive installer, typed at the keyboard, onto a disk that held an MBR table, FAT and LUKS, next to a stand-in Windows disk; then every row marked "Done in the VM" above. The desktop powered off in 4 s.
+- **`tools/test-nvidia`:** both stages, 20 checks in 13 min 13 s. The installer applied the NVIDIA rule with no failed hook and no snapshots; DKMS built `nvidia-open` 620.70.06 for both kernels; each initramfs holds the four modules; the system boots and unlocks; a second apply changes nothing, and an apply without the GPU removes the drop-ins.
+- **CI** is green on `main`, and the testing channel carries the four new versions.
 - **`tools/check`:** passes, with new bats tests for the swapfile and resume arguments, ESP detection, the autologin keyring, the resume-offset check, `HW_SYS`, and the boot-branding hook before Limine exists.
 
 **Found on the way:**

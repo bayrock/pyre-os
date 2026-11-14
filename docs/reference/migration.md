@@ -46,11 +46,15 @@ If Windows was hibernated or "fast startup" is on, the NTFS volume mounts read-o
 
 ## 2. The PyreOS USB
 
+The ISO of 2026-11-14 (`build/out/pyreos-2026.11.14-x86_64.iso`) is built, verified and tested (STATUS). Check it once more right before writing it, then write it:
+
 ```sh
-tools/build-pkgs && sudo tools/build-iso          # an ISO with pyre-installer 0.4.0
-tools/test-iso && tools/test-machine && tools/test-nvidia   # the ISO itself passes in VMs
-sudo dd if=build/out/pyreos-<date>-x86_64.iso of=/dev/sdX bs=4M oflag=sync status=progress
+tools/verify-iso                                  # the image is still what was built
+sudo dd if=build/out/pyreos-2026.11.14-x86_64.iso of=/dev/sdX bs=4M oflag=sync status=progress
+sudo cmp -n "$(stat -c %s build/out/pyreos-2026.11.14-x86_64.iso)" build/out/pyreos-2026.11.14-x86_64.iso /dev/sdX   # the stick holds it, byte for byte
 ```
+
+After a package change, rebuild first (`tools/build-pkgs && sudo tools/build-iso`) and run `tools/test-iso`, `test-e2e`, `test-machine` and `test-nvidia` again.
 
 `/dev/sdX` is the USB stick: check it with `lsblk -o NAME,SIZE,TRAN,MODEL` (`TRAN` is `usb`).
 

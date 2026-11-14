@@ -141,7 +141,9 @@ stage_install() {
   (( local_packages )) && use_local_packages
 
   # The interactive installer, one prompt at a time, in tui.sh's order.
-  type_keys "clear; PYRE_KERNEL_PARAMS='$kernel_params' pyre-install; echo E2E-INSTALL-EXIT=\$? > /dev/ttyS0"$'\n'
+  # The marker gets a line of its own: the serial console may still show its
+  # login prompt.
+  type_keys "clear; PYRE_KERNEL_PARAMS='$kernel_params' pyre-install; rc=\$?; echo > /dev/ttyS0; echo E2E-INSTALL-EXIT=\$rc > /dev/ttyS0"$'\n'
   sleep 3
   prompt disk          # first the 40 GiB disk, "holds vfat crypto_LUKS"; the other "holds vfat"
   send_keys ret
