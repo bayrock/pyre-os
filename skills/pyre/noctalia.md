@@ -70,7 +70,7 @@ sunrise = "06:30"
 ```
 
 - PyreOS never looks the user's location up. To follow the real sunset, the user enters a place on the settings' Location page and turns **Custom Schedule** off.
-- A screenshot or recording never shows the tint. To check that it is on, read the shell's log: `journalctl --user -b | grep 'target .*K'`.
+- A screenshot or recording never shows the tint. To check that it is on, read the shell's log: `grep 'gamma. target' ~/.cache/noctalia/noctalia.log | tail -n 1`.
 
 ## Commands
 

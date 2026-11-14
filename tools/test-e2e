@@ -209,13 +209,16 @@ stage_desktop() {
 
   # Night light: Noctalia's gamma service on niri's gamma control. It is off
   # by default, its schedule is PyreOS's fixed hours (no location lookup), and
-  # Mod+Ctrl+N holds the warm light on at once. Noctalia's log is the
-  # evidence, because the tint is applied on the way to the screen and no
-  # screenshot shows it. The control center below is captured with it held on.
+  # Mod+Ctrl+N holds the warm light on at once. Noctalia's own log file is
+  # the evidence (it does not log to the journal): the tint is applied on the
+  # way to the screen, so no screenshot shows it, and QEMU's display has no
+  # gamma table, so the guest never tints at all. The control center below
+  # is captured with it held on.
+  local nlog="/home/$user/.cache/noctalia/noctalia.log"
   expect nightlight-defaults 'echo "$(u noctalia msg config-get nightlight.enabled) $(u noctalia msg config-get location.custom_schedule) $(u noctalia msg config-get location.sunset) $(u noctalia msg config-get location.sunrise)"' "^false true '20:00' '07:00'\$"
   send_keys meta_l-ctrl-n
   sleep 2
-  expect nightlight-key 'journalctl -b -o cat _UID=$(id -u '"$user"') | grep -c "target 4000K (day=6500K night=4000K force=true"' '^1$'
+  expect nightlight-key "grep -a '\\[gamma\\] target' $nlog | tail -n 1" 'target 4000K \(day=6500K night=4000K force=true'
   send_keys meta_l-s
   sleep 2
   grep -q '"activePanelId":"control-center"' <<<"$(noctalia_status control-center)" || die "Mod+S did not open the control center"
@@ -226,9 +229,9 @@ stage_desktop() {
   # The key again releases it; the schedule then sets a temperature by itself.
   send_keys meta_l-ctrl-n
   sleep 2
-  expect nightlight-schedule 'u noctalia msg nightlight-enable >/dev/null; sleep 1; journalctl -b -o cat _UID=$(id -u '"$user"') | grep -c "target [0-9]*K (day=6500K night=4000K force=false"' '^[1-9]'
+  expect nightlight-schedule "u noctalia msg nightlight-enable >/dev/null; sleep 1; grep -a '\\[gamma\\] target' $nlog | tail -n 1" 'target [0-9]+K \(day=6500K night=4000K force=false'
   expect nightlight-disable 'u noctalia msg nightlight-disable' '^ok$'
-  probe nightlight-log 'journalctl -b -o cat _UID=$(id -u '"$user"') | grep -a -i -e gamma -e "night light" > /mnt/share/nightlight.log' >/dev/null
+  probe nightlight-log "grep -a -F '[gamma]' $nlog > /mnt/share/nightlight.log" >/dev/null
 
   expect no-secret-in-logs "grep -rlF -e '$passphrase' -e '$password' /var/log /etc 2>/dev/null | wc -l" '^0$'
   power_off

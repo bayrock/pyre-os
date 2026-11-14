@@ -202,7 +202,8 @@ Last updated: 2026-11-14
   - `[nightlight] enabled` follows the `[location]` schedule, and `force` holds the night temperature at once (4000 K against 6500 K by default). The schedule fades over an hour around each boundary; everything else applies at once.
   - An enabled night light with no coordinates and no custom schedule does nothing but log a warning. A custom schedule (`custom_schedule`, `sunset`, `sunrise`) needs no location and overrides coordinates.
   - `nightlight-toggle`, `nightlight-force-toggle`, the control center's button and the bar widget change the running shell only, and a new login starts from the saved settings. The settings window writes the saved value.
-  - `noctalia msg status` does not report night light; the shell logs `target <N>K (day=… night=… force=…)` when the temperature it asks for changes.
+  - `noctalia msg status` does not report night light; the shell logs `[gamma] target <N>K (day=… night=… force=…)` when the temperature it asks for changes. Noctalia logs to `~/.cache/noctalia/noctalia.log`, not to the journal.
+  - QEMU's virtio display has no gamma table: niri reports "setting gamma is not supported" and Noctalia logs "gamma control failed for an output". A VM proves the key, the defaults and the schedule, never the tint.
 
 ## Open questions
 
