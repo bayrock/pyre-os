@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Every package whose inputs changed since origin/main needs a new pkgver or
+# pkgrel: the testing channel never replaces a published file (ADR 0009), so
+# the publish job refuses a changed package without a bump. This catches it
+# before the push. origin/main is what CI last published.
+# Usage: tools/check-bumps [BASE]   (default: origin/main; skipped if missing)
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd -- "$repo_root"
+base="${1:-origin/main}"
+if ! git rev-parse -q --verify "$base^{commit}" >/dev/null; then
+  echo "check-bumps: no $base here; skipped"
+  exit 0
+fi
+
+# inputs NAME: the paths a package is built from. Packages built in place
+# read parts of the repository outside packages/NAME (their PKGBUILD's
+# $startdir/../.. paths); keep this in step with them.
+inputs() {
+  printf '%s\n' "packages/$1"
+  case "$1" in
+    pyre-cli) printf '%s\n' src/cli src/hw system/alpm system/systemd-user ;;
+    pyre-desktop) printf '%s\n' defaults skel src/desktop system/pam.d ;;
+    pyre-installer) printf '%s\n' src/installer ;;
+    pyre-themes) printf '%s\n' themes ;;
+  esac
+}
+
+failed=0
+for dir in packages/*/; do
+  name="$(basename -- "$dir")"
+  git cat-file -e "$base:packages/$name/PKGBUILD" 2>/dev/null || continue   # new package
+  mapfile -t paths < <(inputs "$name")
+  # Committed and uncommitted changes since the base, including new files.
+  changed="$( { git diff --name-only "$base" -- "${paths[@]}"; git ls-files --others --exclude-standard -- "${paths[@]}"; } | sort -u)"
+  [[ -n "$changed" ]] || continue
+  old="$(git show "$base:packages/$name/PKGBUILD" | sed -n 's/^pkgver=//p;s/^pkgrel=//p' | paste -sd-)"
+  new="$(sed -n 's/^pkgver=//p;s/^pkgrel=//p' "packages/$name/PKGBUILD" | paste -sd-)"
+  if [[ "$old" == "$new" ]]; then
+    printf 'FAIL: %s changed since %s but is still %s; bump pkgver or pkgrel:\n' "$name" "$base" "$new" >&2
+    printf '  %s\n' "${changed//$'\n'/$'\n'  }" >&2
+    failed=1
+  fi
+done
+(( !failed )) || exit 1
+echo "check-bumps: every changed package has a new version (vs $base)"
