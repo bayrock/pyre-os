@@ -1,0 +1,20 @@
+# shellcheck shell=bash disable=SC2034 # since is read by the engine
+# about: move the theme record into ~/.local/state/pyre/theme/ (ADR 0015)
+# pyre-cli 0.2.0 recorded the current theme in a file at
+# ~/.local/state/pyre/theme. That path is now a directory: Noctalia writes
+# the live terminal colors there, and the record moves to theme/current.
+since=3
+
+state="${XDG_STATE_HOME:-$HOME/.local/state}/pyre/theme"
+
+check() {
+  [[ ! -f "$state" ]]
+}
+
+apply() {
+  local id=""
+  read -r id <"$state" || true
+  rm -f -- "$state"
+  mkdir -p -- "$state"
+  [[ -z "$id" ]] || printf '%s\n' "$id" >"$state/current"
+}

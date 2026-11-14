@@ -3,7 +3,7 @@
 # ADR 0014). The sources are in src/cli/, src/hw/ and system/ of this
 # repository, so the package is built in place.
 pkgname=pyre-cli
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc='PyreOS lifecycle tool: update, snapshot, rollback, doctor, reconcile, themes, hardware rules'
 arch=(any)

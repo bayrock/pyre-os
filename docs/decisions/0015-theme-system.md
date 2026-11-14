@@ -29,13 +29,17 @@ ADR 0005 already requires that "the theme system must drive Noctalia's palette, 
 - **The user stubs already include the generated files,** so Noctalia's hooks never edit a user's config. "PyreOS never rewrites your files" still holds.
   - niri uses `include optional=true "noctalia.kdl"` (niri 26.04), which reloads by itself once the file appears.
   - foot cannot include a missing file, so skel ships a first copy of its theme, rendered from Noctalia's own template.
-- **`pyre theme`** lists the installed themes, shows the current one, and sets one through `color-scheme-set custom <name>`. The rest is Noctalia's job. Noctalia's settings window stays free to choose any other palette.
+- **`pyre theme`** lists the installed themes, shows the current one, and sets one through `color-scheme-set custom <name>`. A theme's wallpaper comes with it through `wallpaper-set`, and `--keep-wallpaper` opts out. The rest is Noctalia's job. Noctalia's settings window stays free to choose any other palette.
+- **Open windows recolor live.** Neither foot nor GTK rereads its theme file, so PyreOS adds one Noctalia user template, `pyre-live`. It runs after the built-in templates (`index = 100`) on every palette change, whichever way the change came, and renders the terminal colors into `~/.local/state/pyre/theme/live-colors`. Its hook, `pyre theme refresh`, then:
+  - writes them as OSC color sequences to each open foot terminal
+  - flips GTK's color-scheme preference and restores it, which makes GTK reload its styles and the CSS Noctalia just wrote
 - **Ember is the default.** It comes from the landing page (`landing/site/site.css`):
   - the surfaces are the mark's orange at low chroma and lightness (OKLCH hue 58)
   - `primary`, `secondary` and `tertiary` are the fire ramp: orange, gold and coral
   - text is the page's cream
   - it is dark only, like the page
   - `tools/ember-palette` derives `palette.json` from those OKLCH values, and `tools/check` keeps the two in sync
+  - its wallpaper is the landing page's cabin at night, generated from the site's own woods SVG and color tokens by `tools/render-wallpaper`. It is CC BY-SA 4.0 like all PyreOS artwork, and `tools/check` keeps its SVG in sync with the site
 - **matugen is not used.** Noctalia's engine replaces it.
 - **Parts Noctalia cannot reach,** Limine and Plymouth at boot, will take their colors from the active theme's `palette.json` through a separate, root-owned step. That comes later in P5.
 

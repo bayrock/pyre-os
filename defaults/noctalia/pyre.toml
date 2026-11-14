@@ -23,6 +23,22 @@ custom_palette = "Ember"
 enable_builtin_templates = true
 builtin_ids = ["niri", "foot", "gtk3", "gtk4", "btop"]
 
+# After those, the terminal colors for "pyre theme refresh", which recolors
+# the foot windows already open (foot only reads its theme file at start).
+[theme.templates.user.pyre-live]
+input_path = "/usr/share/pyre/defaults/noctalia/live-colors.tmpl"
+output_path = "$XDG_STATE_HOME/pyre/theme/live-colors"
+post_hook = "pyre theme refresh"
+index = 100
+
+# Ember's wallpaper until you pick your own; the fill is its night sky, so
+# nothing flashes while it loads. pyre theme set switches it with the theme.
+[wallpaper]
+fill_color = "#130e0a"
+
+[wallpaper.default]
+path = "/usr/share/pyre/themes/ember/wallpapers/ember.jpg"
+
 # Lock after 10 minutes idle and turn the screens off a minute later.
 # Noctalia locks before suspend by default.
 [idle.behavior.lock]

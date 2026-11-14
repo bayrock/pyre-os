@@ -86,7 +86,9 @@ Last updated: 2026-11-13
     - after login, `pyre theme set ember` gives `custom Ember`
     - niri, foot, GTK and btop files carry Ember, and the niri and foot configs validate
     - a live switch to Noctalia's palette recolors the shell and the niri focus ring, and `pyre theme set` brings Ember back
-  - **Open:** foot and GTK windows that are already open keep their colors until restarted, though their files update live. The wallpaper is still Noctalia's default.
+  - **Wallpaper** (`pyre-themes` 0.2.0): Ember's wallpaper is the landing page's cabin at night, rendered by `tools/render-wallpaper` (3840×2160 JPEG with a light grain against banding, 1.2 MB). It is Noctalia's default wallpaper, and `pyre theme set` sets it.
+  - **Live recolor** (`pyre-cli` and `pyre-desktop` 0.2.1): Noctalia's `pyre-live` template runs `pyre theme refresh` on every palette change. Open foot terminals get OSC color sequences, and open GTK windows get a color-scheme nudge.
+  - `tools/test-theme` checks with screen pixels that an open foot and an open nautilus recolor on a live switch and back. The user unit `003-theme-state` migrates 0.2.0's theme record file.
 - **e2e on the rebuilt ISO (2026-11-13):** `tools/test-e2e` passed every stage, including the new `pacman-unlocked` check after rollback.
 - **Fixed on the way:** a restored snap-pac "pre" snapshot carries `/var/lib/pacman/db.lck`, so pacman stayed locked after `pyre rollback`. `pyre-base` 0.3.1 clears it at boot with a tmpfiles rule.
 - **Release key** (2026-11-13, `docs/reference/release-key.md`): primary `65D123DD9A18A346A94C38E6228693F6D58F0A7F`, certify-only, kept offline. Signing subkey `279066B8C9E6FD17B3B9189C588DC5476F4A31E4`, expiring 2028-11-12, held in the Actions secret `PYRE_SIGNING_SUBKEY`. `pyre-keyring` 0.2.0 trusts it alongside the dev key.

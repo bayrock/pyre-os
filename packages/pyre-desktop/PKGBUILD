@@ -4,7 +4,7 @@
 # stubs are in defaults/ and skel/ of this repository, so the package is built
 # in place.
 pkgname=pyre-desktop
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc='PyreOS desktop: niri, Noctalia, session services, default apps and defaults'
 arch=(any)

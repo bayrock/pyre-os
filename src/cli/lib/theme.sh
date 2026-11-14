@@ -27,6 +27,16 @@ theme_field() {
   sed -n "s/^$2 *= *\"\\(.*\\)\"\$/\\1/p" "$(themes_dir)/$1/theme.toml" | head -n 1
 }
 
+# theme_wallpaper ID: the theme's wallpaper file, if it names one that exists.
+theme_wallpaper() {
+  local rel file
+  rel="$(theme_field "$1" wallpaper)"
+  [[ -n "$rel" ]] || return 1
+  file="$(themes_dir)/$1/$rel"
+  [[ -f "$file" ]] || return 1
+  printf '%s\n' "$file"
+}
+
 # theme_resolve NAME: the theme id for an id or a display name (any case).
 theme_resolve() {
   local want="${1,,}" id

@@ -166,12 +166,13 @@ The installer will offer bundles once the TUI is exercised.
 - **A theme is a Noctalia palette.** Each one is a directory, `themes/<id>/`, installed to `/usr/share/pyre/themes/<id>/`:
   - `theme.toml` holds `name`, `description` and `mode`
   - `palette.json` is in Noctalia's palette format 2: 16 Material roles plus terminal and ANSI colors
-  - later, `wallpapers/`
+  - `wallpapers/`, which `theme.toml` names (`wallpaper = "wallpapers/…"`)
   - data only, never code. `tools/check-themes` checks the schema and WCAG contrast.
 - **Applying a theme.**
   1. The user reconcile unit `002-theme-palettes` links each palette into `~/.config/noctalia/palettes/`.
   2. Noctalia's defaults select Ember, and Noctalia renders the palette into the apps through its built-in templates, live, on every change.
-  3. `pyre theme set <name>` switches through `noctalia msg color-scheme-set custom <name>`.
+  3. `pyre theme set <name>` switches through `noctalia msg color-scheme-set custom <name>`, and sets the theme's wallpaper.
+  4. On every palette change, Noctalia's `pyre-live` user template runs `pyre theme refresh`, which recolors open foot terminals (OSC sequences) and open GTK windows (a color-scheme nudge).
 - **Coverage:** Noctalia, the greeter (Noctalia's appearance sync), niri, foot, GTK 3/4 (with `adw-gtk-theme`) and btop. Qt follows when a default app uses it. Limine and Plymouth come later, through a root-owned step that reads the active `palette.json`.
 - **Shipped themes:** "Ember" is the default, plus a small curated set built from palettes whose licenses have been checked. No third-party theme artwork is copied.
 

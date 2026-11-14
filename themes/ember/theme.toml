@@ -4,3 +4,5 @@
 name = "Ember"
 description = "Warm dark surfaces with an orange, gold and coral fire accent"
 mode = "dark"
+# The landing page's cabin at night (tools/render-wallpaper; CC BY-SA 4.0).
+wallpaper = "wallpapers/ember.jpg"

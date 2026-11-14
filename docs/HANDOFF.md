@@ -5,8 +5,7 @@
 1. **The release key: done on 2026-11-13** (`docs/reference/release-key.md`). The primary key is offline, the subkey is in the Actions secret `PYRE_SIGNING_SUBKEY`, and `pyre-keyring` 0.2.0 trusts it alongside the dev key. Release images drop the dev key in P7.
 2. **The testing channel: live on 2026-11-13** (`docs/BUILDING.md`, "The testing channel"). Every push to `main` publishes signed packages to the `testing` release, and `pyre-release` 0.3.0 points installed systems at it. **Any package change needs a `pkgver`/`pkgrel` bump**, or the publish job fails. `tools/test-channel` checks that an installed VM updates from it.
 3. **P5 theme system: started on 2026-11-13** (ADR 0015). A theme is a Noctalia palette in `themes/<id>/`, shipped by `pyre-themes`. Ember comes from the landing page. Noctalia's built-in templates color niri, foot, GTK 3/4 and btop, and `pyre theme` lists and sets themes. `tools/test-theme` (VM) passes. Next in P5:
-   - **Live recolor of running foot and GTK windows.** Noctalia rewrites their files live, but open windows keep their colors until restarted. Look at what Noctalia upstream plans first; foot takes OSC color sequences, and GTK needs a settings nudge.
-   - **An Ember wallpaper.** The desktop still shows Noctalia's default artwork.
+   - Done: the Ember wallpaper (`tools/render-wallpaper`), and live recolor of open foot and GTK windows (`pyre theme refresh`).
    - Limine, Plymouth and greeter branding, from the active `palette.json` (root-owned step, ADR 0015).
    - Curated alternative themes (license-checked palettes), and the welcome flow and user docs.
    - **Pending ISO rebuild (user, `sudo tools/build-iso`):** the next `tools/test-e2e` run checks Ember from the first login on a fresh install (`theme-ember` and the checks after it in the desktop stage).

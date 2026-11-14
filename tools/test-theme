@@ -47,6 +47,21 @@ ember_primary="$(sed -n 's/^ *"primary": "\(#[0-9a-f]*\)",$/\1/p' "$repo_root/th
 ember_surface="$(sed -n 's/^ *"surface": "\(#[0-9a-f]*\)",$/\1/p' "$repo_root/themes/ember/palette.json" | head -n 1)"
 [[ -n "$ember_primary" && -n "$ember_surface" ]] || { echo "$tool: cannot read Ember's colors" >&2; exit 1; }
 
+# pixel_is SHOT X Y COLOR [not]: the screenshot's pixel is (or is not) COLOR.
+# The open windows are foot at the left and nautilus at the right of the
+# single 1280x800 output.
+pixel_is() {
+  local got
+  got="$(magick "$share/desktop-$1.png" -format "%[hex:p{$2,$3}]" info:)"
+  got="#${got:0:6}"
+  if [[ "${5:-}" == not ]]; then
+    [[ "${got,,}" != "${4,,}" ]] || die "$1: pixel $2,$3 is still $4"
+  else
+    [[ "${got,,}" == "${4,,}" ]] || die "$1: pixel $2,$3 is $got, wants $4"
+  fi
+  pass "$1: pixel $2,$3 ${5:+not }$4"
+}
+
 # --- 1. install the packages on the console, before anyone logs in ---------------
 start_vm install-packages --net --boot-disk
 unlock_and_login
@@ -80,6 +95,7 @@ expect gtk4-css 'grep -ci "'"$ember_primary"'" '"$home"'/gtk-4.0/noctalia.css' '
 expect gtk3-css 'test -s '"$home"'/gtk-3.0/noctalia.css && echo present' '^present$'
 expect btop-theme 'test -s '"$home"'/btop/themes/noctalia.theme && echo present' '^present$'
 expect gtk-dark 'u gsettings get org.gnome.desktop.interface color-scheme' 'prefer-dark'
+expect wallpaper 'u noctalia msg wallpaper-get' 'themes/ember/wallpapers/ember\.jpg'
 
 # A terminal and the file manager, for the visual review.
 send_keys meta_l-ret
@@ -87,6 +103,8 @@ sleep 3
 expect foot-open 'u niri msg windows | grep -c "App ID: \"foot\""' '^[1-9]'
 probe nautilus 'u setsid -f nautilus >/dev/null 2>&1; sleep 4' >/dev/null
 shot theme-ember
+pixel_is theme-ember 300 400 "$ember_surface"
+pixel_is theme-ember 950 620 "$ember_surface"
 
 # --- 3. a live switch away recolors the apps, and pyre theme set brings Ember back ---
 expect switch-away 'u noctalia msg color-scheme-set builtin Noctalia >/dev/null; sleep 3; u noctalia msg color-scheme-get' '^builtin Noctalia$'
@@ -94,9 +112,16 @@ expect niri-recolored 'grep -c "'"$ember_primary"'" '"$home"'/niri/noctalia.kdl 
 expect foot-recolored 'grep -c "^background='"${ember_surface#\#}"'" '"$home"'/foot/themes/noctalia || true' '^0$'
 expect not-current 'u pyre theme current 2>&1; true' 'no PyreOS theme'
 shot theme-noctalia
+# The windows already open recolor live: foot through pyre theme refresh's
+# OSC sequences, nautilus through its GTK color-scheme nudge.
+pixel_is theme-noctalia 300 400 "$ember_surface" not
+pixel_is theme-noctalia 950 620 "$ember_surface" not
 expect switch-back 'u pyre theme set ember >/dev/null; sleep 3; u noctalia msg color-scheme-get' '^custom Ember$'
+expect wallpaper-again 'u noctalia msg wallpaper-get' 'themes/ember/wallpapers/ember\.jpg'
 expect niri-ember-again 'grep -c "'"$ember_primary"'" '"$home"'/niri/noctalia.kdl' '^[1-9]'
 shot theme-ember-again
+pixel_is theme-ember-again 300 400 "$ember_surface"
+pixel_is theme-ember-again 950 620 "$ember_surface"
 probe evidence 'cp /var/log/test-theme-install.log /mnt/share/ 2>/dev/null; true' >/dev/null
 power_off
 printf '%s: PASS (screenshots in %s)\n' "$tool" "$vm_dir/share"

@@ -1,10 +1,15 @@
 # shellcheck shell=bash
 # help: list or switch the desktop theme
-# usage: pyre theme [list]   |   pyre theme set <name>   |   pyre theme current
-#   list         the installed themes, the current one marked with *
-#   set NAME     switch to theme NAME: Noctalia recolors the shell and the
-#                apps it themes (niri, foot, GTK, btop) live
-#   current      the current theme's id
+# usage: pyre theme [list]   |   pyre theme set <name> [--keep-wallpaper]   |   pyre theme current
+#   list              the installed themes, the current one marked with *
+#   set NAME          switch to theme NAME: Noctalia recolors the shell and the
+#                     apps it themes (niri, foot, GTK, btop) live, and shows
+#                     the theme's wallpaper
+#   --keep-wallpaper  switch the colors only
+#   current           the current theme's id
+#   refresh           recolor the foot and GTK windows already open with the
+#                     colors Noctalia rendered last (Noctalia runs this on
+#                     every palette change)
 # A theme is a Noctalia palette (ADR 0015). Noctalia's own settings window can
 # pick any other palette; pyre theme only lists and sets the PyreOS themes.
 
@@ -35,7 +40,15 @@ theme_list() {
 }
 
 theme_set() {
-  local id name mode
+  local id name mode wallpaper keep=0 arg want=""
+  for arg in "$@"; do
+    case "$arg" in
+      --keep-wallpaper) keep=1 ;;
+      -*) die "theme set: unknown option $arg" ;;
+      *) [[ -z "$want" ]] || die "theme set takes one theme name"; want="$arg" ;;
+    esac
+  done
+  set -- "$want"
   [[ -n "${1:-}" ]] || die "theme set needs a theme name (pyre theme list)"
   id="$(theme_resolve "$1")" || die "no theme named $1 (pyre theme list)"
   name="$(theme_field "$id" name)"
@@ -47,14 +60,78 @@ theme_set() {
   if [[ -n "$mode" ]]; then
     noctalia msg theme-mode-set "$mode" >/dev/null || warn "could not set $mode mode"
   fi
-  printf '%s\n' "$id" | write_atomic "${XDG_STATE_HOME:-$HOME/.local/state}/pyre/theme"
+  if (( !keep )) && wallpaper="$(theme_wallpaper "$id")"; then
+    noctalia msg wallpaper-set "$wallpaper" >/dev/null || warn "could not set the wallpaper"
+  fi
+  printf '%s\n' "$id" | write_atomic "$(theme_state)/current"
   info "theme: $name"
+}
+
+# theme_state: the directory for the theme record and Noctalia's live colors.
+# pyre-cli 0.2.0 kept a file there; the reconcile unit 003-theme-state moves
+# it, and this does the same if the unit has not run yet.
+theme_state() {
+  local dir="${XDG_STATE_HOME:-$HOME/.local/state}/pyre/theme" id=""
+  if [[ -f "$dir" ]]; then
+    read -r id <"$dir" || true
+    rm -f -- "$dir"
+    mkdir -p -- "$dir"
+    [[ -z "$id" ]] || printf '%s\n' "$id" >"$dir/current"
+  fi
+  printf '%s\n' "$dir"
+}
+
+# gtk_nudge: GTK reads gtk.css only at start, but reloads its styles when
+# the color-scheme preference changes. Flip it and put it back, so open GTK
+# windows pick up the CSS Noctalia just wrote.
+gtk_nudge() {
+  local key=org.gnome.desktop.interface scheme
+  command -v gsettings >/dev/null 2>&1 || return 0
+  scheme="$(gsettings get "$key" color-scheme 2>/dev/null)" || return 0
+  case "$scheme" in
+    "'prefer-dark'") gsettings set "$key" color-scheme prefer-light ;;
+    *) gsettings set "$key" color-scheme prefer-dark ;;
+  esac
+  gsettings set "$key" color-scheme "${scheme//\'/}"
+}
+
+# foot_ttys: the terminals of this user's foot windows (and foot server), one
+# /dev/pts path per line. Each foot process is the parent of its shells.
+foot_ttys() {
+  local pid child tty
+  while IFS= read -r pid; do
+    while IFS= read -r child; do
+      tty="$(ps -o tty= -p "$child" 2>/dev/null | tr -d '[:space:]')"
+      [[ "$tty" =~ ^pts/[0-9]+$ ]] && printf '%s/dev/%s\n' "$PYRE_ROOT" "$tty"
+    done < <(pgrep -P "$pid" 2>/dev/null)
+  done < <(pgrep -u "$(id -u)" -x foot 2>/dev/null) | sort -u
+}
+
+# theme_refresh: foot reads its colors only at start, but takes OSC color
+# sequences at any time. Write the palette Noctalia rendered (live-colors,
+# from the pyre-live template) to every open foot terminal, then nudge GTK.
+# Runs as a Noctalia hook, so it never fails the theme change.
+theme_refresh() {
+  local colors code color seq="" tty count=0
+  colors="$(theme_state)/live-colors"
+  [[ -f "$colors" ]] || { warn "no rendered colors at $colors yet"; return 0; }
+  while read -r code color; do
+    [[ "$code" =~ ^(4\;[0-9]{1,2}|1[0-9])$ && "$color" =~ ^#[0-9a-fA-F]{6}$ ]] || continue
+    seq+=$'\e]'"$code;$color"$'\e\\'
+  done <"$colors"
+  [[ -n "$seq" ]] || { warn "no colors in $colors"; return 0; }
+  while IFS= read -r tty; do
+    printf '%s' "$seq" 2>/dev/null >"$tty" && count=$((count + 1))
+  done < <(foot_ttys)
+  info "recolored $count foot terminal(s)"
+  gtk_nudge
 }
 
 cmd_theme() {
   case "${1:-list}" in
     list) theme_list ;;
-    set) theme_set "${2:-}" ;;
+    set) shift; theme_set "$@" ;;
+    refresh) theme_refresh ;;
     current)
       local id
       id="$(theme_active)"

@@ -101,3 +101,11 @@ EOF
   ln -sfn /nonexistent "$palettes/Ember.json"
   ( source "$repo/src/cli/reconcile/user/002-theme-palettes"; ! check; apply; check )
 }
+
+@test "user/003-theme-state turns pyre-cli 0.2.0's theme file into the state directory" {
+  mkdir -p "$XDG_STATE_HOME/pyre"
+  printf 'ember\n' >"$XDG_STATE_HOME/pyre/theme"
+  converge_twice "$repo/src/cli/reconcile/user/003-theme-state"
+  [ -d "$XDG_STATE_HOME/pyre/theme" ]
+  [ "$(cat "$XDG_STATE_HOME/pyre/theme/current")" = ember ]
+}

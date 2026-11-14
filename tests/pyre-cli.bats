@@ -16,7 +16,15 @@ setup() {
   # snapper is not called for fresh scopes; a stub records later calls.
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   printf '#!/bin/sh\necho "snapper $*" >> "%s"\n' "$LOG" >"$BATS_TEST_TMPDIR/bin/snapper"
-  chmod +x "$BATS_TEST_TMPDIR/bin/snapper"
+  # The desktop tools the theme commands call are stubs by default, so no
+  # test reaches the real session: gsettings logs, noctalia and pgrep find
+  # nothing. Tests replace them as needed.
+  printf '#!/bin/sh\necho "gsettings $*" >> "%s"\n' "$LOG" >"$BATS_TEST_TMPDIR/bin/gsettings"
+  printf '#!/bin/sh\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/noctalia"
+  printf '#!/bin/sh\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/pgrep"
+  chmod +x "$BATS_TEST_TMPDIR/bin/snapper" "$BATS_TEST_TMPDIR/bin/gsettings" \
+    "$BATS_TEST_TMPDIR/bin/noctalia" "$BATS_TEST_TMPDIR/bin/pgrep"
+  unset DBUS_SESSION_BUS_ADDRESS
   PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
 
@@ -194,7 +202,7 @@ echo "noctalia \$*" >> "$LOG"
 case "\$2" in
   color-scheme-get) cat "$scheme" ;;
   color-scheme-set) [ -e "$BATS_TEST_TMPDIR/down" ] && exit 1; echo "\$3 \$4" > "$scheme" ;;
-  theme-mode-set) ;;
+  theme-mode-set|wallpaper-set) ;;
   *) exit 2 ;;
 esac
 STUB
@@ -223,7 +231,18 @@ STUB
   [ "$(readlink "$HOME/.config/noctalia/palettes/Ember.json")" = "$PYRE_ROOT/usr/share/pyre/themes/ember/palette.json" ]
   [ "$(cat "$scheme")" = "custom Ember" ]
   grep -qx 'noctalia msg theme-mode-set dark' "$LOG"
-  [ "$(cat "$XDG_STATE_HOME/pyre/theme")" = ember ]
+  grep -qx "noctalia msg wallpaper-set $PYRE_ROOT/usr/share/pyre/themes/ember/wallpapers/ember.jpg" "$LOG"
+  [ "$(cat "$XDG_STATE_HOME/pyre/theme/current")" = ember ]
+}
+
+@test "theme set --keep-wallpaper changes the colors only" {
+  noctalia_stub
+  run pyre theme set --keep-wallpaper ember
+  [ "$status" -eq 0 ]
+  [ "$(cat "$scheme")" = "custom Ember" ]
+  ! grep -q wallpaper-set "$LOG"
+  run pyre theme set ember --bogus
+  [ "$status" -ne 0 ]
 }
 
 @test "theme set refuses unknown names, a stopped Noctalia, and never replaces the user's palette file" {
@@ -236,7 +255,7 @@ STUB
   run pyre theme set ember
   [ "$status" -ne 0 ]
   [[ "$output" == *"is it running"* ]]
-  [ ! -e "$XDG_STATE_HOME/pyre/theme" ]
+  [ ! -e "$XDG_STATE_HOME/pyre/theme/current" ]
   rm "$BATS_TEST_TMPDIR/down"
 
   rm "$HOME/.config/noctalia/palettes/Ember.json"
@@ -246,4 +265,48 @@ STUB
   [ "$(cat "$HOME/.config/noctalia/palettes/Ember.json")" = mine ]
   run pyre theme current
   [ "$status" -ne 0 ]
+}
+
+@test "theme refresh writes the rendered colors as OSC sequences to every open foot terminal" {
+  noctalia_stub
+  mkdir -p "$XDG_STATE_HOME/pyre/theme" "$PYRE_ROOT/dev/pts"
+  printf '# comment\n4;0 #362b24\n11 #1c1611\nbogus line\n17 #643d20\n' >"$XDG_STATE_HOME/pyre/theme/live-colors"
+  : >"$PYRE_ROOT/dev/pts/3"
+  : >"$PYRE_ROOT/dev/pts/7"
+  # Two foot processes; the first holds a shell on pts/3, the second on pts/7
+  # and a child without a terminal.
+  printf '#!/bin/bash\ncase "$*" in\n  *-x\\ foot*) printf "100\\n200\\n" ;;\n  "-P 100") echo 101 ;;\n  "-P 200") printf "201\\n202\\n" ;;\nesac\n' >"$BATS_TEST_TMPDIR/bin/pgrep"
+  printf '#!/bin/bash\ncase "$4" in 101) echo " pts/3" ;; 201) echo "pts/7" ;; *) echo "?" ;; esac\n' >"$BATS_TEST_TMPDIR/bin/ps"
+  chmod +x "$BATS_TEST_TMPDIR/bin/pgrep" "$BATS_TEST_TMPDIR/bin/ps"
+
+  run pyre theme refresh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"recolored 2 foot terminal(s)"* ]]
+  want="$(printf '\033]4;0;#362b24\033\\\033]11;#1c1611\033\\\033]17;#643d20\033\\')"
+  [ "$(cat "$PYRE_ROOT/dev/pts/3")" = "$want" ]
+  [ "$(cat "$PYRE_ROOT/dev/pts/7")" = "$want" ]
+}
+
+@test "theme refresh is quiet and succeeds before Noctalia has rendered anything" {
+  noctalia_stub
+  run pyre theme refresh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no rendered colors"* ]]
+}
+
+@test "theme refresh flips the GTK color scheme and restores it, and theme set migrates the old state file" {
+  noctalia_stub
+  printf "#!/bin/bash\necho \"gsettings \$*\" >> \"$LOG\"\n[ \"\$1\" = get ] && echo \"'prefer-dark'\"\nexit 0\n" >"$BATS_TEST_TMPDIR/bin/gsettings"
+  chmod +x "$BATS_TEST_TMPDIR/bin/gsettings"
+  mkdir -p "$XDG_STATE_HOME/pyre/theme"
+  printf '11 #1c1611\n' >"$XDG_STATE_HOME/pyre/theme/live-colors"
+  run pyre theme refresh
+  [ "$status" -eq 0 ]
+  [ "$(grep '^gsettings set' "$LOG" | tail -n 2 | tr '\n' '|')" = "gsettings set org.gnome.desktop.interface color-scheme prefer-light|gsettings set org.gnome.desktop.interface color-scheme prefer-dark|" ]
+
+  rm -r "$XDG_STATE_HOME/pyre/theme"
+  printf 'ember\n' >"$XDG_STATE_HOME/pyre/theme"
+  run pyre theme set ember
+  [ "$status" -eq 0 ]
+  [ "$(cat "$XDG_STATE_HOME/pyre/theme/current")" = ember ]
 }
