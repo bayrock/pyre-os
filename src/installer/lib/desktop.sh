@@ -102,12 +102,14 @@ seed_autologin_keyring() {
 # Hardware rules (pyre hw): their packages come from the live medium's
 # repositories through pacstrap, because the target's pacman.conf points at
 # network mirrors; then the rules write their drop-ins in the target.
+# snap-pac is installed by now, and SNAP_PAC_SKIP keeps this transaction, like
+# the rest of the installation, from leaving snapshots behind.
 hw_setup() {
   local pkgs
   pkgs="$(in_target pyre hw packages)"
   if [[ -n "$pkgs" ]]; then
     # shellcheck disable=SC2086 # a space-separated package list
-    pacstrap -C /etc/pacman.conf -G -M "$TARGET" --noconfirm --needed $pkgs
+    SNAP_PAC_SKIP=y pacstrap -C /etc/pacman.conf -G -M "$TARGET" --noconfirm --needed $pkgs
   fi
   in_target pyre hw apply --no-packages
   info "hardware rules: ${pkgs:-none matched}"

@@ -11,7 +11,9 @@ share="$root/usr/share/pyre/boot"
 begin='# >>> PyreOS boot menu'
 end='# <<< PyreOS boot menu'
 
-esp="$(sed -n 's/^ESP_PATH="\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' "$root/etc/default/limine" 2>/dev/null | tail -n 1)"
+# No /etc/default/limine (a system without Limine, or an install that has not
+# reached the boot stack yet) means the default ESP path, not a failure.
+esp="$(sed -n 's/^ESP_PATH="\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' "$root/etc/default/limine" 2>/dev/null | tail -n 1)" || true
 esp="$root${esp:-/boot}"
 conf="$esp/limine.conf"
 

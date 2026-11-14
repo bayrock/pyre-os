@@ -57,3 +57,11 @@ brand() {
   grep -qx 'interface_branding: PyreOS' "$PYRE_ROOT/efi/limine.conf"
   [ -f "$PYRE_ROOT/efi/pyre/wallpaper.jpg" ]
 }
+
+@test "succeeds quietly before the boot stack exists: no /etc/default/limine, no limine.conf" {
+  rm -f "$PYRE_ROOT/etc/default/limine" "$conf"
+  run brand
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no $PYRE_ROOT/boot/limine.conf yet"* ]]
+  [ ! -e "$PYRE_ROOT/boot/pyre" ]
+}
