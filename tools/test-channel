@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2016 # probes are typed into the guest verbatim
+# Check that an installed PyreOS updates from the hosted testing channel (ADR 0009).
+# Boots a throwaway overlay of an installed test disk (default build/vm/test-e2e,
+# from tools/test-e2e) with network, points [pyre] at the channel, clears the
+# package cache, and runs pyre update. The base disk is never written.
+# Usage: tools/test-channel [--base NAME] [--server URL]
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+tool=test-channel
+name=test-channel
+base_name=test-e2e
+server=https://github.com/bayrock/pyre-os/releases/download/testing
+while (( $# )); do
+  case "$1" in
+    --base) base_name="${2:?--base needs a VM name}"; shift 2 ;;
+    --server) server="${2:?--server needs a URL}"; shift 2 ;;
+    -h|--help) sed -n '3,7s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) echo "$tool: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+# shellcheck source=tools/lib/vmtest.sh
+source "$repo_root/tools/lib/vmtest.sh"
+
+base="$repo_root/build/vm/$base_name"
+[[ -f "$base/disk.qcow2" && -f "$base/OVMF_VARS.4m.fd" ]] ||
+  { echo "$tool: no installed disk in $base; run tools/test-e2e first" >&2; exit 1; }
+if [[ -f "$base/qemu.pid" ]] && kill -0 "$(<"$base/qemu.pid")" 2>/dev/null; then
+  echo "$tool: $base_name is running; stop it first" >&2; exit 1
+fi
+release_pkgbuild="$repo_root/packages/pyre-release/PKGBUILD"
+release_ver="$(sed -n 's/^pkgver=//p' "$release_pkgbuild")-$(sed -n 's/^pkgrel=//p' "$release_pkgbuild")"
+
+# A system installed before pyre-keyring 0.2.0 trusts only the dev key; it gets
+# the newest local keyring (signed with the dev key) through the share.
+shopt -s nullglob
+keyrings=("$repo_root"/build/repo/pyre-keyring-*.pkg.tar.zst)
+(( ${#keyrings[@]} )) || { echo "$tool: no pyre-keyring in build/repo; run tools/build-pkgs" >&2; exit 1; }
+
+rm -rf -- "$vm_dir"
+mkdir -p -- "$vm_dir/share"
+qemu-img create -q -f qcow2 -b "$base/disk.qcow2" -F qcow2 "$vm_dir/disk.qcow2"
+cp -- "$base/OVMF_VARS.4m.fd" "$vm_dir/"
+mkdir -m 700 -- "$vm_dir/gnupg"   # never the user's own ~/.gnupg
+release_fpr="$(GNUPGHOME="$vm_dir/gnupg" gpg --batch --with-colons --show-keys "$repo_root/packages/pyre-keyring/release.asc" | awk -F: '$1=="fpr"{print $10; exit}')"
+[[ -n "$release_fpr" ]] || { echo "$tool: could not read release.asc" >&2; exit 1; }
+cp -- "${keyrings[-1]}" "$vm_dir/share/"
+[[ -f "${keyrings[-1]}.sig" ]] && cp -- "${keyrings[-1]}.sig" "$vm_dir/share/"
+
+start_vm channel --net --boot-disk
+unlock_and_login
+expect share 'mkdir -p /mnt/share && mount -t 9p -o trans=virtio pyre-share /mnt/share && echo mounted' '^mounted$'
+# A disk rolled back before pyre-base 0.3.1 still carries the restored snapshot's
+# pacman lock; nothing runs pacman yet, so it is stale. The update below brings
+# the tmpfiles rule that clears it at boot, checked at the end.
+probe stale-lock 'pgrep -x pacman >/dev/null || rm -f /var/lib/pacman/db.lck' >/dev/null
+expect release-key 'pacman-key --list-keys '"$release_fpr"' >/dev/null 2>&1 || pacman -U --noconfirm /mnt/share/pyre-keyring-*.pkg.tar.zst > /var/log/test-channel-keyring.log 2>&1; pacman-key --list-keys '"$release_fpr"' >/dev/null 2>&1 && echo trusted || tail -n 8 /var/log/test-channel-keyring.log' '^trusted$'
+expect channel 'printf "Server = %s\n" "'"$server"'" > /etc/pacman.d/pyre-mirrorlist; grep -c "^\[pyre\]" /etc/pacman.conf' '^1$'
+expect sync 'yes | pacman -Scc >/dev/null 2>&1; pacman -Sy > /var/log/test-channel-sync.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-channel-sync.log' '^rc=0$'
+expect listed 'pacman -Sl pyre | sed -n "s/^pyre pyre-release //p"' "^${release_ver//./\\.}( |$)"
+expect sudo-nopasswd 'printf "%s\n" "'"$user"' ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/90-test-channel && chmod 440 /etc/sudoers.d/90-test-channel && echo set' '^set$'
+expect pyre-update 'runuser -u '"$user"' -- env HOME=/home/'"$user"' pyre update --noconfirm > /var/log/test-channel.log 2>&1; echo rc=$?; tail -n 3 /var/log/test-channel.log' '^rc=0$'
+expect upgraded 'pacman -Q pyre-release' "^pyre-release ${release_ver//./\\.}$"
+expect up-to-date 'pacman -Qu | wc -l' '^0$'
+expect lock-rule 'touch /var/lib/pacman/db.lck; systemd-tmpfiles --remove /usr/lib/tmpfiles.d/pyre-pacman-lock.conf; test -e /var/lib/pacman/db.lck && echo locked || echo cleared' '^cleared$'
+expect download 'pacman -Sw --noconfirm pyre-cli > /var/log/test-channel-dl.log 2>&1; echo rc=$?; grep -c "checking package integrity" /var/log/test-channel-dl.log' '^rc=0$'
+probe evidence 'rm -f /etc/sudoers.d/90-test-channel; cp /var/log/test-channel*.log /mnt/share/' >/dev/null
+power_off
+printf '%s: PASS (logs in %s)\n' "$tool" "$vm_dir/share"

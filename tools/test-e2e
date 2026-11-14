@@ -229,6 +229,9 @@ stage_rollback() {
   expect rolled-back-root 'findmnt -no SOURCE /' '\[/@\]$'
   expect rolled-back-marker 'test -e /etc/e2e-after-snapshot && echo present || echo absent' '^absent$'
   expect backup-snapshot 'snapper -c root list --columns description' 'e2e rollback backup'
+  # The restored "pre" snapshot was taken mid-transaction and holds pacman's lock;
+  # pyre-base's tmpfiles rule clears it at boot, so pacman works again.
+  expect pacman-unlocked 'test -e /var/lib/pacman/db.lck && echo locked || echo unlocked' '^unlocked$'
   power_off
 }
 

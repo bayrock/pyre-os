@@ -2,7 +2,7 @@
 # Meta-package for every PyreOS system (ADR 0008, ADR 0012). Kernels and the
 # Limine boot stack are installed by pyre-install, not forced here.
 pkgname=pyre-base
-pkgver=0.3.0
+pkgver=0.3.1
 pkgrel=1
 pkgdesc='PyreOS base system (meta-package)'
 arch=(any)
@@ -20,10 +20,13 @@ depends=(
   sudo
   zram-generator
 )
-source=(zram-generator.conf)
-sha256sums=('33ec83a5d7a378bfb77b105ed174bb23eb12c16478d8009b32702fbad7978af4')
+source=(zram-generator.conf pacman-lock.conf)
+sha256sums=('33ec83a5d7a378bfb77b105ed174bb23eb12c16478d8009b32702fbad7978af4'
+            '32af1349f5699750e25300fc6836092bc6885be21fdf169d7b29b2454eec2ee5')
 
 package() {
   # A vendor drop-in; /etc/systemd/zram-generator.conf stays the admin's.
   install -Dm644 zram-generator.conf "$pkgdir/usr/lib/systemd/zram-generator.conf.d/50-pyre.conf"
+  # Clears the stale pacman lock a restored or booted snapshot carries.
+  install -Dm644 pacman-lock.conf "$pkgdir/usr/lib/tmpfiles.d/pyre-pacman-lock.conf"
 }
