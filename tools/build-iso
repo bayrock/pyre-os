@@ -54,6 +54,14 @@ if [[ -e "$work_dir" ]]; then
   rm -rf --one-file-system -- "$work_dir"
 fi
 
+# mkarchiso holds the unpacked system, its squashfs and the image at once, and
+# xorriso removes an ISO of the same date before it finds that the new one
+# does not fit. Refuse a build that cannot finish before it starts.
+readonly need_gib=12
+avail_gib=$(( $(df --output=avail -k -- "$build_root" | tail -n 1) / 1048576 ))
+(( avail_gib >= need_gib )) ||
+  die "only $avail_gib GiB free under $build_root; an ISO build needs about $need_gib (older ISOs in $out_dir and the VM disks under build/vm/ are safe to delete)"
+
 owner="${SUDO_UID:-0}:${SUDO_GID:-0}"
 # mkarchiso creates the work directory itself; -r only removes one it created.
 mkdir -p -- "$out_dir" "$log_dir"

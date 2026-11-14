@@ -73,7 +73,7 @@ Output stays inside `build/`:
 - The ISO goes to `build/out/`, owned by the invoking user.
 - The full mkarchiso log goes to `build/logs/build-iso-<time>.log`. The terminal shows only a summary, or the last 40 log lines on failure. Pass `--verbose` to stream the whole log.
 
-mkarchiso downloads packages through the host's pacman cache. A releng build needs about 10 GB of free space while it runs.
+mkarchiso downloads packages through the host's pacman cache. A build needs about 12 GiB of free space while it runs, and the wrapper refuses to start with less: on 2026-11-14 a build ran out of space while writing the image, after it had already removed the previous ISO of the same date. Older ISOs in `build/out/` and the VM disks under `build/vm/` are safe to delete.
 
 ## Boot-test in a VM
 
