@@ -45,6 +45,14 @@ tools/build-pkgs   # every packages/*/PKGBUILD -> build/repo/ (the local [pyre] 
 - CI passes `--syncdeps` instead, which installs the `makedepends` into its throwaway container.
 - **Signing.** When the development key is in `build/keys/gnupg/`, every package and the repository database are signed with it (ADR 0014). `pyre-keyring` trusts that key, and installed systems require signed `[pyre]` packages. Without the key, CI included, packages are unsigned.
 
+## The testing channel
+
+Every push to `main` publishes the packages job's build to the GitHub Release `testing` (ADR 0009). The `publish` job in `check.yml` imports the release signing subkey from the `PYRE_SIGNING_SUBKEY` secret and runs `tools/publish-testing`. Installed systems use it through `pyre-release`'s mirrorlist: `Server = https://github.com/bayrock/pyre-os/releases/download/testing`.
+
+- **Published files never change.** A package file that is already in the release is kept, and its published copy is indexed. So **any change to a package needs a `pkgver` or `pkgrel` bump**: a PyreOS package whose content changed without one fails the publish job, before anything is uploaded. A vendored package keeps its published build until its version changes.
+- **Order.** New packages and signatures are uploaded first, then the signed `pyre.db` and `pyre.files`, then older files the database no longer lists are deleted. Every signature is checked against `packages/pyre-keyring/release.asc` alone first.
+- **Clients** need `pyre-keyring` 0.2.0 or later, which trusts the release key. A system that only trusts the dev key rejects the channel's database.
+
 ## Build the ISO
 
 ```sh

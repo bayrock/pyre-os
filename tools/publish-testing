@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# Publish a built [pyre] repository to the testing channel: the GitHub Release
+# named "testing" (ADR 0009). CI runs this on pushes to main (check.yml).
+#   - A package file already in the release is never replaced. Its published copy
+#     is downloaded and indexed instead, so one file name always means the same
+#     bytes. A PyreOS package (arch=any) whose content changed without a
+#     pkgver/pkgrel bump fails the run before anything is uploaded.
+#   - New package files are signed with the release signing subkey and uploaded,
+#     then the signed database, then files the database no longer lists are
+#     deleted. Every signature is checked against the release public key alone.
+# Needs gh (GH_TOKEN, GH_REPO), repo-add, bsdtar, and gpg with the release
+# signing subkey in GNUPGHOME (docs/reference/release-key.md).
+# Usage: tools/publish-testing [REPO_DIR]   (default: build/repo)
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+tag=testing
+src="${1:-$repo_root/build/repo}"
+release_key="${PYRE_RELEASE_PUBKEY:-$repo_root/packages/pyre-keyring/release.asc}"
+server_url="https://github.com/${GH_REPO:-}/releases/download/$tag"
+
+die() { printf 'publish-testing: %s\n' "$*" >&2; exit 1; }
+say() { printf '==> %s\n' "$*"; }
+
+for cmd in gh gpg gpgconf repo-add bsdtar gzip; do
+  command -v "$cmd" >/dev/null 2>&1 || die "missing $cmd"
+done
+[[ -n "${GH_REPO:-}" ]] || die "set GH_REPO to owner/name"
+[[ -d "$src" ]] || die "no repository at $src"
+[[ -f "$release_key" ]] || die "no release public key at $release_key"
+
+sign_fpr="$(gpg --batch --with-colons --show-keys -- "$release_key" | awk -F: '$1=="fpr"{print $10; exit}')"
+[[ -n "$sign_fpr" ]] || die "could not read $release_key"
+gpg --batch --list-secret-keys -- "$sign_fpr" >/dev/null 2>&1 ||
+  die "the release signing subkey ($sign_fpr) is not in GNUPGHOME"
+
+work="$(mktemp -d)"
+trap 'GNUPGHOME="$work/verify" gpgconf --kill gpg-agent 2>/dev/null || true; rm -rf -- "$work"' EXIT
+mkdir -p -- "$work/stage" "$work/published" "$work/db"
+mkdir -m 700 -- "$work/verify"
+GNUPGHOME="$work/verify" gpg --batch --quiet --import -- "$release_key" 2>/dev/null
+
+# verified FILE: FILE.sig is a good signature by the release key, as pacman sees it.
+verified() {
+  GNUPGHOME="$work/verify" gpg --batch --status-fd 1 --verify -- "$1.sig" "$1" 2>/dev/null |
+    grep -q "^\[GNUPG:\] VALIDSIG .* $sign_fpr\$"
+}
+
+# content_of PKG: what a package installs, without build time, packager or mtimes.
+content_of() {
+  bsdtar -xOf "$1" .PKGINFO | grep -Ev '^(builddate|packager) = '
+  bsdtar -xOf "$1" .MTREE | gzip -dc | grep -Ev '^\./\.(PKGINFO|BUILDINFO) ' | sed -E 's/ time=[0-9.]+//'
+}
+
+contains() {
+  local want="$1" item
+  shift
+  for item in "$@"; do [[ "$item" == "$want" ]] && return 0; done
+  return 1
+}
+
+# The release and what it holds; create it on the first publish.
+published=()
+if listing="$(gh release view "$tag" --json assets --jq '.assets[].name' 2>"$work/err")"; then
+  [[ -z "$listing" ]] || mapfile -t published <<<"$listing"
+elif grep -qi 'not found' "$work/err"; then
+  say "creating release $tag"
+  gh release create "$tag" --prerelease --latest=false --title 'PyreOS testing channel' \
+    --notes 'Signed PyreOS packages from main. Filled in by tools/publish-testing.' \
+    ${GITHUB_SHA:+--target "$GITHUB_SHA"} >/dev/null
+else
+  die "gh release view failed: $(cat -- "$work/err")"
+fi
+
+shopt -s nullglob
+pkgs=("$src"/*.pkg.tar.zst)
+(( ${#pkgs[@]} )) || die "no packages in $src"
+
+uploads=()
+changed=()
+for pkg in "${pkgs[@]}"; do
+  name="${pkg##*/}"
+  # GitHub rewrites other characters in asset names, and ':' (an epoch) breaks
+  # CDN paths later (ADR 0009).
+  [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || die "$name: asset names allow only letters, digits, '.', '_' and '-'"
+  if contains "$name" "${published[@]}"; then
+    gh release download "$tag" --pattern "$name" --pattern "$name.sig" --dir "$work/published" --clobber
+    pub="$work/published/$name"
+    [[ -f "$pub" && -f "$pub.sig" ]] || die "the release has $name but not $name.sig"
+    verified "$pub" || die "the published $name does not verify against the release key"
+    if [[ "$name" == *-any.pkg.tar.zst ]] && [[ "$(content_of "$pkg")" != "$(content_of "$pub")" ]]; then
+      changed+=("$name")
+    fi
+    cp -- "$pub" "$pub.sig" "$work/stage/"
+  else
+    cp -- "$pkg" "$work/stage/"
+    gpg --batch --yes --pinentry-mode error -u "$sign_fpr" --detach-sign \
+      -o "$work/stage/$name.sig" -- "$work/stage/$name"
+    verified "$work/stage/$name" || die "the new signature on $name does not verify"
+    uploads+=("$work/stage/$name" "$work/stage/$name.sig")
+  fi
+done
+(( ${#changed[@]} == 0 )) ||
+  die "changed without a pkgver/pkgrel bump (the published file would not change): ${changed[*]}"
+
+say "indexing ${#pkgs[@]} packages"
+(cd -- "$work/stage" && repo-add --quiet --sign --key "$sign_fpr" pyre.db.tar.zst ./*.pkg.tar.zst)
+dbfiles=(pyre.db pyre.db.sig pyre.files pyre.files.sig)
+for file in "${dbfiles[@]}"; do
+  cp -L -- "$work/stage/$file" "$work/db/$file"   # real files: release assets cannot be symlinks
+done
+for file in pyre.db pyre.files; do
+  verified "$work/db/$file" || die "the signature on $file does not verify"
+done
+
+if (( ${#uploads[@]} )); then
+  say "uploading $(( ${#uploads[@]} / 2 )) new packages"
+  gh release upload "$tag" "${uploads[@]}"
+else
+  say "no new packages"
+fi
+say "uploading the database"
+gh release upload "$tag" --clobber "${dbfiles[@]/#/$work/db/}"
+
+keep=("${dbfiles[@]}")
+for pkg in "$work"/stage/*.pkg.tar.zst; do keep+=("${pkg##*/}" "${pkg##*/}.sig"); done
+for name in "${published[@]}"; do
+  contains "$name" "${keep[@]}" && continue
+  say "removing $name"
+  gh release delete-asset "$tag" "$name" --yes
+done
+
+# The release now holds exactly the indexed files.
+mapfile -t now < <(gh release view "$tag" --json assets --jq '.assets[].name' | sort)
+mapfile -t want < <(printf '%s\n' "${keep[@]}" | sort)
+[[ "${now[*]}" == "${want[*]}" ]] || die "the release does not match the database: has [${now[*]}], wants [${want[*]}]"
+
+# shellcheck disable=SC2016 # the backticks are Markdown
+{
+  printf 'Signed PyreOS packages from `main`'
+  [[ -z "${GITHUB_SHA:-}" ]] || printf ' at %s' "$GITHUB_SHA"
+  printf '. This is a testing channel, not a stable release.\n\n'
+  printf 'pacman server, in `/etc/pacman.d/pyre-mirrorlist`:\n\n```\nServer = %s\n```\n\n' "$server_url"
+  printf 'Signed with the PyreOS release key `%s` (`pyre-keyring` 0.2.0 or later).\n\n' "$sign_fpr"
+  printf 'Packages:\n\n'
+  for pkg in "$work"/stage/*.pkg.tar.zst; do printf -- '- `%s`\n' "${pkg##*/}"; done
+} > "$work/notes"
+gh release edit "$tag" --notes-file "$work/notes" >/dev/null
+say "published ${#pkgs[@]} packages to $server_url"

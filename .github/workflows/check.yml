@@ -39,6 +39,8 @@ jobs:
       - name: tools/build-pkgs
         # makepkg refuses root, so build as an unprivileged user. --syncdeps installs
         # the vendored packages' makedepends into this throwaway container.
+        env:
+          PACKAGER: PyreOS CI <ci@pyreos.invalid>
         run: |
           useradd -m builder
           echo 'builder ALL=(root) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/builder
@@ -46,3 +48,43 @@ jobs:
           su builder -c 'tools/build-pkgs --syncdeps'
       - name: namcap
         run: namcap build/repo/*.pkg.tar.zst
+      - uses: actions/upload-artifact@v4
+        with:
+          name: repo
+          path: build/repo/*.pkg.tar.zst
+          if-no-files-found: error
+          retention-days: 7
+
+  # The testing channel (ADR 0009): pushes to main publish the unsigned build from
+  # the packages job, signed here with the release subkey, to the "testing" release.
+  # Only this job sees the secret.
+  publish:
+    needs: [check, packages]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-testing
+      cancel-in-progress: false
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed github-cli
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: repo
+          path: build/repo
+      - name: tools/publish-testing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PYRE_SIGNING_SUBKEY: ${{ secrets.PYRE_SIGNING_SUBKEY }}
+        run: |
+          [ -n "$PYRE_SIGNING_SUBKEY" ] || { echo "the PYRE_SIGNING_SUBKEY secret is not set" >&2; exit 1; }
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          install -d -m 700 "$GNUPGHOME"
+          printf '%s\n' "$PYRE_SIGNING_SUBKEY" | gpg --batch --quiet --import
+          unset PYRE_SIGNING_SUBKEY
+          tools/publish-testing build/repo

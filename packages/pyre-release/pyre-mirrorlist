@@ -2,6 +2,7 @@
 # /etc/pacman.conf includes this file from its [pyre] section, which
 # pyre-install adds only when a server is set. pacman keeps your edits.
 #
-# The public testing channel is not hosted yet; pyre-install --config can set
-# one with pyre_repo = "URL".
-#Server = https://example.invalid/pyre/testing/$arch
+# The testing channel: signed packages built from main, published to a GitHub
+# Release by tools/publish-testing. pyre-install --config can set another
+# server with pyre_repo = "URL".
+Server = https://github.com/bayrock/pyre-os/releases/download/testing

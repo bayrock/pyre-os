@@ -44,7 +44,7 @@ export PKGDEST="$repo_dir"
 export BUILDDIR="$build_root/pkgbuild"
 export SRCDEST="$build_root/pkgsrc"
 export LOGDEST="$build_root/logs"
-export PACKAGER="PyreOS development build <dev@pyreos.invalid>"
+export PACKAGER="${PACKAGER:-PyreOS development build <dev@pyreos.invalid>}"
 mkdir -p -- "$PKGDEST" "$BUILDDIR" "$SRCDEST" "$LOGDEST"
 
 # The package name of a file name-pkgver-pkgrel-arch.pkg.tar.zst.
@@ -62,7 +62,7 @@ remove_built() {
   for file in "$repo_dir"/*.pkg.tar.zst; do
     name="$(pkg_name_of "$file")"
     for want in "$@"; do
-      [[ "$name" == "$want" ]] && rm -f -- "$file"
+      [[ "$name" == "$want" ]] && rm -f -- "$file" "$file.sig"
     done
   done
   shopt -u nullglob

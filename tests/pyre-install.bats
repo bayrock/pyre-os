@@ -215,7 +215,7 @@ EOF
   TARGET="$BATS_TEST_TMPDIR/target"
   mkdir -p "$TARGET/etc/pacman.d"
   printf '[core]\nInclude = /etc/pacman.d/mirrorlist\n' >"$TARGET/etc/pacman.conf"
-  cp "$BATS_TEST_DIRNAME/../packages/pyre-release/pyre-mirrorlist" "$TARGET/etc/pacman.d/pyre-mirrorlist"
+  printf '# no server yet\n#Server = https://example.invalid/pyre\n' >"$TARGET/etc/pacman.d/pyre-mirrorlist"
 
   configure_pyre_repo
   ! grep -q '^\[pyre\]' "$TARGET/etc/pacman.conf"
@@ -238,7 +238,7 @@ EOF
   mkdir -p "$TARGET/etc/pacman.d"
   printf '[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[pyre]\nSigLevel = Optional TrustAll\nServer = file:///opt/pyre-offline\n\n[extra]\nInclude = /etc/pacman.d/mirrorlist\n' \
     >"$TARGET/etc/pacman.conf"
-  cp "$BATS_TEST_DIRNAME/../packages/pyre-release/pyre-mirrorlist" "$TARGET/etc/pacman.d/pyre-mirrorlist"
+  printf '# no server yet\n' >"$TARGET/etc/pacman.d/pyre-mirrorlist"
 
   configure_pyre_repo
   ! grep -q -e '^\[pyre\]' -e pyre-offline "$TARGET/etc/pacman.conf"
@@ -249,6 +249,20 @@ EOF
   [ "$(grep -c '^\[pyre\]' "$TARGET/etc/pacman.conf")" -eq 1 ]
   ! grep -q 'Optional TrustAll' "$TARGET/etc/pacman.conf"
   [ "$(grep '^\[' "$TARGET/etc/pacman.conf" | tail -n 1)" = "[pyre]" ]
+}
+
+@test "the shipped mirrorlist points [pyre] at the testing channel" {
+  # shellcheck source=/dev/null
+  source "$lib/repo.sh"
+  config_load "$cfg"
+  TARGET="$BATS_TEST_TMPDIR/target"
+  mkdir -p "$TARGET/etc/pacman.d"
+  printf '[core]\nInclude = /etc/pacman.d/mirrorlist\n' >"$TARGET/etc/pacman.conf"
+  cp "$BATS_TEST_DIRNAME/../packages/pyre-release/pyre-mirrorlist" "$TARGET/etc/pacman.d/pyre-mirrorlist"
+
+  configure_pyre_repo
+  [ "$(grep -c '^\[pyre\]' "$TARGET/etc/pacman.conf")" -eq 1 ]
+  [ "$(grep '^Server' "$TARGET/etc/pacman.d/pyre-mirrorlist")" = "Server = https://github.com/bayrock/pyre-os/releases/download/testing" ]
 }
 
 @test "restore_target_pacman_conf replaces the offline config archinstall copied, and refuses a bad one" {

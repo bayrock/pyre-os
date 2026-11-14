@@ -195,7 +195,7 @@ The installer will offer bundles once the TUI is exercised.
 
 - Each package is a standard PKGBUILD in `packages/<name>/`.
 - CI builds them in clean chroots and signs them with a CI-held subkey of the PyreOS key. `pyre-keyring` ships from day one.
-- Hosting starts on GitHub Releases and moves to object storage plus a CDN before public release.
+- Hosting starts on GitHub Releases (the `testing` release, filled by `tools/publish-testing`) and moves to object storage plus a CDN before public release.
 - There are two channels, `testing` and `stable`, and promotion is scripted.
 - `[pyre]` is listed after `[core]`, `[extra]`, and `[multilib]`.
 - Every release runs an N-1 → N upgrade test in a VM.
