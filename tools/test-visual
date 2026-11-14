@@ -120,6 +120,8 @@ power_off
 start_vm desktop --boot-disk
 unlock_and_login
 greeter_login
+# Do not disturb: niri's "Screenshot captured" toasts stay out of the captures.
+expect dnd 'u noctalia msg notification-dnd-toggle; echo rc=$?' '^rc=0$'
 expect welcome-shown 'for _ in $(seq 90); do test -e /home/'"$user"'/.local/state/pyre/welcome/shown && break; sleep 1; done; test -e /home/'"$user"'/.local/state/pyre/welcome/shown && echo shown' '^shown$'
 sleep 6
 shoot welcome
@@ -133,6 +135,8 @@ send_keys meta_l-ret
 sleep 4
 probe nautilus 'u setsid -f nautilus >/dev/null 2>&1; sleep 6' >/dev/null
 probe fetch 'u niri msg action focus-column-first >/dev/null; sleep 1' >/dev/null
+# fastfetch draws the PyreOS flame (pyre-desktop's /etc/xdg default).
+expect fastfetch-logo 'u fastfetch --pipe true > /tmp/fastfetch.txt 2>&1; grep -q "\.\*#########\*" /tmp/fastfetch.txt && grep -q "OS: PyreOS" /tmp/fastfetch.txt && echo flame-and-info' '^flame-and-info$'
 type_keys "clear; fastfetch"$'\n'
 sleep 4
 for theme in ember birch evergreen frost; do

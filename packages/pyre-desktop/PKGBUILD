@@ -4,7 +4,7 @@
 # stubs are in defaults/ and skel/ of this repository, so the package is built
 # in place.
 pkgname=pyre-desktop
-pkgver=0.3.0
+pkgver=0.3.1
 pkgrel=1
 pkgdesc='PyreOS desktop: niri, Noctalia, session services, default apps and defaults'
 arch=(any)
@@ -68,6 +68,7 @@ backup=(
   etc/skel/.config/btop/btop.conf
   etc/skel/.config/gtk-3.0/gtk.css
   etc/skel/.config/gtk-4.0/gtk.css
+  etc/xdg/fastfetch/config.jsonc
 )
 
 package() {
@@ -87,6 +88,10 @@ package() {
   install -Dm644 -t "$plugins/welcome" "$root/src/desktop/welcome/plugin.toml" "$root/src/desktop/welcome/welcome.luau"
   install -Dm644 "$root/src/desktop/pyre-welcome.desktop" "$pkgdir/usr/share/applications/pyre-welcome.desktop"
   install -Dm644 "$root/landing/site/pyre-e.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/pyreos.svg"
+  # fastfetch shows the PyreOS flame, not the Arch logo. A system-wide
+  # default: ~/.config/fastfetch/config.jsonc wins over it.
+  install -Dm644 "$root/src/desktop/fastfetch/config.jsonc" "$pkgdir/etc/xdg/fastfetch/config.jsonc"
+  install -Dm644 "$root/src/desktop/fastfetch/pyre.txt" "$pkgdir/usr/share/pyre/fastfetch/pyre.txt"
   # The user guide, which the welcome panel reads in place.
   install -Dm644 -t "$pkgdir/usr/share/doc/pyre/guide" "$root"/docs/guide/[0-9]*.md
 }
