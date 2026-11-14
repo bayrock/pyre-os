@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Check that a built ISO carries what the build put into it: the root image's
+# checksum as mkarchiso recorded it, and the offline repository file for file
+# against the staged profile (build/profile, kept by tools/build-iso). An
+# install trusts every package in that repository, and a bad one stops it
+# half way: on 2026-11-14 one flipped bit in one package did. Needs no root.
+# Usage: tools/verify-iso [ISO]   (default: newest build/out/pyreos-*.iso)
+# Needs about 6 GiB under build/ while it runs.
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+staged="$repo_root/build/profile/airootfs/opt/pyre-offline"
+tmp="$repo_root/build/verify-iso.tmp"
+sfs_path=arch/x86_64/airootfs.sfs
+
+die() {
+  printf 'verify-iso: %s\n' "$*" >&2
+  exit 1
+}
+
+case "${1:-}" in
+  -h | --help) sed -n '2,8s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
+esac
+iso="${1:-}"
+if [[ -z "$iso" ]]; then
+  iso="$(find "$repo_root/build/out" -maxdepth 1 -name 'pyreos-*.iso' -printf '%T@ %p\n' 2>/dev/null |
+    sort -n | tail -n 1 | cut -d' ' -f2-)"
+fi
+[[ -n "$iso" && -f "$iso" ]] || die "no ISO found; build one with sudo tools/build-iso"
+[[ -d "$staged" ]] || die "no staged profile at $staged; it is what the image is checked against"
+[[ "$staged" -ot "$iso" ]] || die "the staged profile is newer than $iso; it belongs to another build"
+for tool in bsdtar unsquashfs sha512sum; do
+  command -v "$tool" >/dev/null 2>&1 || die "$tool not found"
+done
+
+cleanup() {
+  [[ -d "$tmp" ]] || return 0
+  chmod -R u+rwX -- "$tmp" 2>/dev/null || true
+  rm -rf -- "$tmp"
+}
+trap cleanup EXIT
+cleanup
+mkdir -p -- "$tmp"
+
+bsdtar -xf "$iso" -C "$tmp" "$sfs_path" "${sfs_path%.sfs}.sha512" || die "cannot read the root image out of $iso"
+recorded="$(cut -d' ' -f1 "$tmp/${sfs_path%.sfs}.sha512")"
+actual="$(sha512sum "$tmp/$sfs_path" | cut -d' ' -f1)"
+[[ -n "$recorded" && "$recorded" == "$actual" ]] ||
+  die "$iso: the root image does not match its recorded checksum; the image is damaged"
+printf '   ok  root image matches its recorded sha512\n'
+
+unsquashfs -q -n -no-xattrs -d "$tmp/root" "$tmp/$sfs_path" opt/pyre-offline >/dev/null ||
+  die "cannot unpack the offline repository from $iso"
+if ! differences="$(diff -rq -- "$staged" "$tmp/root/opt/pyre-offline" 2>&1)"; then
+  printf '%s\n' "$differences" | sed "s|$repo_root/||g" | head -n 20 >&2
+  die "$iso: the offline repository differs from what was staged. Do not use this image; rebuild it. \
+If it happens again, test this machine's memory (the ISO's boot menu has memtest86+)."
+fi
+printf '   ok  offline repository: %d files identical to the staged profile\n' \
+  "$(find "$staged" -type f | wc -l)"
+printf 'verify-iso: %s is what was built\n' "${iso##*/}"

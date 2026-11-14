@@ -17,7 +17,7 @@ Last updated: 2026-11-14
 | Autologin keyring (ADR 0018) | Done in the VM | no dialog, `secret-tool` round trip, power-off in seconds |
 | NVIDIA install path | Done in the VM, without the GPU | `tools/test-nvidia`: the rule's packages from the offline repository, DKMS for both kernels in the installer's chroot, the modules in both initramfs images, a normal boot |
 | `pyre hw` on the real GPU | Detection only | read-only on the machine: the RTX 3060 Ti matches `10-nvidia-open` |
-| An ISO with the new packages | **Needs the owner** | `tools/build-pkgs && sudo tools/build-iso`; until then the VM tests take `--local-packages` |
+| An ISO with the new packages | **Needs the owner**: two builds on 2026-11-14 failed (no disk space; one damaged package, below) | `sudo tools/build-iso`; until then the VM tests take `--local-packages` |
 | The author's overlay | Scaffolded, untested on the machine | a local repository outside this one (`../pyre-overlay`): outputs, keys, foot, mpv, package lists |
 | Real hardware: driver under niri, 240 Hz and VRR, sleep, Bluetooth, audio, peripherals | Waits for the install | `tools/hw-report` collects it in one run |
 | Migration, then a week of daily use | Waits for the owner | the exit criterion |
@@ -40,6 +40,8 @@ Last updated: 2026-11-14
 - **NVIDIA sleep needs no setup:** with `nvidia-open` 595 and later, `nvidia-utils` disables its own suspend services (ADR 0017).
 - **On an 800 px wide output the default bar's clock and media widget overlap.** The machine's portrait screen is 1080 px wide; check it there.
 - **Two defects the NVIDIA install showed,** both fixed: the driver transaction ran after snap-pac without `SNAP_PAC_SKIP`, so such an install began with a snapshot pair; and `pyre-base`'s boot-branding hook failed during every install, because it ran before `/etc/default/limine` existed (`pyre-base` 0.5.1).
+- **One ISO build produced a damaged image** (2026-11-14): one bit of one offline package differed from the cached file, which itself still verifies. The squashfs matched its recorded checksum and the ISO on disk matched its cached copy, so the bit flipped while the image was being built; the host logged no machine-check or filesystem error. pacman's signature check stopped the install at that package. `tools/build-iso` now ends with `tools/verify-iso` and removes an image that fails. If it happens again, test the development machine's memory.
+- **A build without enough disk space** failed in xorriso after removing the previous ISO of the same date; `tools/build-iso` now needs 12 GiB free before it starts.
 - **The serial log sometimes shows a character of the guest's output twice** (its input arrived intact in 150 long commands). When it hit a probe's end marker the probe never finished. Markers now match with any character doubled (`tools/lib/vmtest.sh`).
 
 **Carried over** (later phases unless reprioritized):

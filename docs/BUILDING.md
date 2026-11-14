@@ -67,6 +67,7 @@ Every build starts from scratch:
 2. It copies `iso/` to `build/profile/` and adds the **offline repository**: the dependency closure of `iso/offline.x86_64`, downloaded into `build/offline/cache/` and placed at `/opt/pyre-offline` in the image, together with the `core.db`, `extra.db` and `pyre.db` it was resolved against.
 3. Arch packages come from one explicit mirror, `PYRE_MIRROR` (default `https://geo.mirror.pkgbuild.com/$repo/os/$arch`), never the host's mirrorlist. So the live system and the offline repository match.
 4. It runs `mkarchiso -r` on the staged profile, so the work directory is deleted after a successful build.
+5. It runs `tools/verify-iso` on the result: the root image against the checksum mkarchiso recorded, and the offline repository inside the image, file for file, against the staged copy. An image that fails is removed. `tools/verify-iso [ISO]` also runs on its own, without root, as long as `build/profile/` is still that build's.
 
 Output stays inside `build/`:
 

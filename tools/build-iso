@@ -157,4 +157,11 @@ chown "$owner" "$out_dir"/*.iso
 # Let the user inspect and clean the staged profile and offline cache without sudo.
 chown -R "$owner" "$staged_dir" "$build_root/offline" "$iso_cache"
 iso="$(find "$out_dir" -maxdepth 1 -name '*.iso' -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
+# The image must be what was staged. A damaged install image is worse than
+# none, so one that fails the check does not stay in the output directory.
+printf '\nVerifying %s against the staged profile...\n' "${iso##*/}"
+if ! "$repo_root/tools/verify-iso" "$iso"; then
+  rm -f -- "$iso"
+  die "the image failed verification and was removed; run the build again"
+fi
 printf '\nBuilt %s (%s) in %ds\n' "$iso" "$(du -h -- "$iso" | cut -f1)" "$((SECONDS - start))"
