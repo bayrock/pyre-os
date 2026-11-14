@@ -4,18 +4,53 @@ Last updated: 2026-11-14
 
 ## Current phase
 
-**P6, daily driver on the development machine (next).** P5 was accepted on 2026-11-14 (below). P6 moves to real hardware: the development machine (`docs/reference/dev-machine.md`), its NVIDIA GPU, three outputs, suspend and hibernate, peripherals, and Windows dual-boot, then the author's overlay repo and the migration itself.
+**P6, daily driver on the development machine (active).** Everything about the machine that needs no real hardware is built and passes in VMs. What remains needs the machine itself and its owner: an ISO rebuild (sudo), the backups, and the install (`docs/reference/migration.md`).
+
+| Step | State | Evidence |
+|---|---|---|
+| Migration plan | Written; the owner reviews and runs it | `docs/reference/migration.md` |
+| Interactive installer (gum) | Done | `tools/test-machine`, install stage: every prompt typed at the keyboard |
+| Hibernation (ADR 0017) | Done in the VM | swapfile in `@swap`, resume arguments, hibernate, power off, resume into the same boot and niri |
+| Windows boot entry (ADR 0017) | Done in the VM | the entry below PyreOS, kept across a transaction, chainloads the other disk's boot manager; that disk's checksum never changes |
+| Three outputs, one portrait | Done in the VM | positions and a 270° transform from the user's `config.kdl`, a bar on each, an 800x1280 screenshot |
+| Suspend | Done in the VM | suspend, wake, locked, unlock, outputs back |
+| Autologin keyring (ADR 0018) | Done in the VM | no dialog, `secret-tool` round trip, power-off in seconds |
+| NVIDIA install path | Done in the VM, without the GPU | `tools/test-nvidia`: the rule's packages from the offline repository, DKMS for both kernels in the installer's chroot, the modules in both initramfs images, a normal boot |
+| `pyre hw` on the real GPU | Detection only | read-only on the machine: the RTX 3060 Ti matches `10-nvidia-open` |
+| An ISO with the new packages | **Needs the owner** | `tools/build-pkgs && sudo tools/build-iso`; until then the VM tests take `--local-packages` |
+| The author's overlay | Scaffolded, untested on the machine | a local repository outside this one (`../pyre-overlay`): outputs, keys, foot, mpv, package lists |
+| Real hardware: driver under niri, 240 Hz and VRR, sleep, Bluetooth, audio, peripherals | Waits for the install | `tools/hw-report` collects it in one run |
+| Migration, then a week of daily use | Waits for the owner | the exit criterion |
+
+**P6 runs** (2026-11-14, ISO `pyreos-2026.11.14-x86_64.iso` with `--local-packages`: `pyre-installer` 0.4.0, `pyre-cli` 0.3.1, `pyre-desktop` 0.3.2, `pyre-base` 0.5.1):
+
+- **`tools/test-machine`:** all four stages, 75 checks in 7 min 14 s. The interactive installer, typed at the keyboard, onto a disk that held an MBR table, FAT and LUKS, next to a stand-in Windows disk; then every row marked "Done in the VM" above. The desktop powered off in 4 s.
+- **`tools/test-nvidia`:** both stages, 21 checks in 10 min 42 s. The installer applied the NVIDIA rule with no failed hook and no snapshots; DKMS built `nvidia-open` 620.70.06 for both kernels; each initramfs holds the four modules; the system boots and unlocks; a second apply changes nothing, and an apply without the GPU removes the drop-ins.
+- **`tools/test-e2e`:** every stage, 96 checks. The first run stopped at the snapshot stage's first probe, on a doubled character in the serial log (below); `--from snapshot-boot` passed that stage and the rollback.
+- **`tools/check`:** passes, with new bats tests for the swapfile and resume arguments, ESP detection, the autologin keyring, the resume-offset check, `HW_SYS`, and the boot-branding hook before Limine exists.
+
+**Found on the way:**
+
+- **The machine boots in legacy BIOS mode today** (MBR disk, no EFI variables); Windows on the other disk is UEFI. PyreOS installs on UEFI only, so the USB must be started through its "UEFI:" entry. `pyre-install` refuses a BIOS boot before asking anything.
+- **`FIND_BOOTLOADERS` never finds Windows on another disk:** `limine-install` only looks on its own ESP, where the one loader it found was Limine's own fallback copy (the "EFI fallback" menu entry, now gone). The installer adds the Windows entry itself.
+- **Autologin put a keyring dialog on the desktop:** Noctalia asks the secret service at start. While the dialog was open a shutdown took 92 s, because Noctalia did not stop; with the passwordless default keyring it takes 2 s.
+- **QEMU's TCO watchdog reset every resumed guest** a few seconds after a successful resume: the kernel that boots only to resume never loads the watchdog driver. `tools/run-vm` straps the watchdog to not reboot. Real firmware arms no such timer.
+- **The hibernate stage runs without GL.** After a hibernation QEMU is a new process, and a GL guest's host-side resources go with the old one; hibernating a GL guest was not tried. Suspend keeps the process, and runs with GL.
+- **NVIDIA sleep needs no setup:** with `nvidia-open` 595 and later, `nvidia-utils` disables its own suspend services (ADR 0017).
+- **On an 800 px wide output the default bar's clock and media widget overlap.** The machine's portrait screen is 1080 px wide; check it there.
+- **Two defects the NVIDIA install showed,** both fixed: the driver transaction ran after snap-pac without `SNAP_PAC_SKIP`, so such an install began with a snapshot pair; and `pyre-base`'s boot-branding hook failed during every install, because it ran before `/etc/default/limine` existed (`pyre-base` 0.5.1).
+- **The serial log sometimes shows a character of the guest's output twice** (its input arrived intact in 150 long commands). When it hit a probe's end marker the probe never finished. Markers now match with any character doubled (`tools/lib/vmtest.sh`).
 
 **Carried over** (later phases unless reprioritized):
 
 - **Website (P5, started early):** the landing page lives in `landing/`, and the `pages` workflow publishes it to <https://bayrock.github.io/pyre-os/>. It went live on 2026-11-13 and serves `landing/site/` byte for byte. It was checked locally at 360, 768 and 1280 px in headless Chromium.
-- **Untested paths:** the interactive gum TUI (only `--config` has run), and real hardware (only QEMU with OVMF), including Bluetooth adapters (P6).
-- **Not built yet:** the hibernation swapfile option; Windows chainload detection (`FIND_BOOTLOADERS=yes` untested); `pyre hw apply` and `pyre reconcile --system` (P4).
+- **Untested paths:** real hardware (only QEMU with OVMF), including Bluetooth adapters; installing next to another system on the same disk (out of scope, ADR 0008).
+- **Not built yet:** bundles in the installer.
 - **Repository:** the `testing` channel is live (below). There is no `stable` channel or promotion script yet (P7), and installs from ISOs built before `pyre-release` 0.3.0 have no `[pyre]` server.
-- **Sizes:** the ESP is 2 GiB, while limine-snapper-sync recommends 4 GiB (entries are pruned at 85% usage). The ISO is now 3.0 GB, 1.4 GB of it the offline repo.
+- **Sizes:** the ESP is 2 GiB, while limine-snapper-sync recommends 4 GiB (entries are pruned at 85% usage). With the NVIDIA modules each initramfs is 102 MB, and a fresh install uses 320 MiB of the ESP (16%). The ISO is now 3.0 GB, 1.4 GB of it the offline repo.
 - **limine-snapper-sync 1.32.1 rough edges** (worth reporting upstream): each prompt wraps stdin in a new buffered reader and spins on EOF; it calls `stty` on `/dev/tty`, so it stops outside the foreground process group; it writes the backup's `info.xml` without fsync, so a power cut right after a restore leaves an orphaned backup.
-- **From P3:** users created after install get bash's own `.bashrc` (P4 user reconcile, ADR 0013); with autologin the keyring stays locked until first use.
-- **From P4:** `pyre hw` has run only against a simulated sysfs, so real GPUs wait for P6. The `-gaming` and `-lazyvim` bundles are deferred. `[pyre]` is hosted on the `testing` channel since 2026-11-13.
+- **From P3:** users created after install get bash's own `.bashrc` (P4 user reconcile, ADR 0013). Turning autologin on after the install does not create the passwordless keyring (ADR 0018).
+- **From P4:** the `-gaming` and `-lazyvim` bundles are deferred. `[pyre]` is hosted on the `testing` channel since 2026-11-13.
 
 ## Accepted phases
 
@@ -102,7 +137,7 @@ Last updated: 2026-11-14
     - The test runs without GL (`--display none`), because QEMU has no capturable surface at the boot console with GL, and with `plymouth.ignore-serial-consoles`, because Plymouth falls back to text mode when a serial console is configured.
     - The shared VM unlock step also accepts the passphrase request itself, which `quiet` keeps on the serial console.
   - **Login screen** (`pyre-cli` 0.2.2): the system unit `002-greeter-appearance` seeds Ember into the greeter's `sync.toml` until someone syncs, and creates `greeter.toml` with `hide_logo = true` when missing. Checked in the VM on the software-rendered greeter (`--display none`): the cabin wallpaper, a warm card, the orange accent, and no Noctalia logo. `tools/test-theme` and `tools/test-e2e` check the seeded files.
-  - Learned along the way: under sustained serial output the test console sometimes doubles a character. A long probe can then lose its end marker, so read long files through the 9p share instead.
+  - Learned along the way: the serial log sometimes doubles a character of the guest's output, so long files are read through the 9p share instead.
   - **ISO BIOS menu:** `iso/syslinux/splash.png` is now the cabin at night (`tools/render-wallpaper`, 640×480), and the menu uses Ember's colors. `tools/test-iso` captures both firmwares' menus and fails a BIOS menu that isn't the Ember splash. It fails on the ISO built on 2026-11-13, which shows releng's Arch logo, until the next rebuild.
   - **Alternative themes** (`pyre-themes` 0.3.0, 2026-11-14): Birch (light), Evergreen and Frost, all original, each the Ember cabin at another hour or season. `tools/theme-palettes` generates every palette (it replaces `tools/ember-palette`, and Ember's own colors are byte-identical), and `tools/render-wallpaper` renders every wallpaper plus a 1640×400 banner. Ember carries Birch as its light variant, and the reverse. `check-themes` exempts white rather than black from the ANSI contrast check on light variants.
   - **Welcome panel** (ADR 0016, `pyre-desktop` 0.3.0, `pyre-cli` 0.3.0): the Noctalia plugin `pyre/welcome`, "Welcome home.", with the theme buttons, the main keys, updates, `pyre doctor`, the settings and the guide. `pyre welcome` opens it, and niri runs `pyre welcome --first-login` once.

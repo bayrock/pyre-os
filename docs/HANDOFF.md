@@ -1,35 +1,39 @@
 # Handoff
 
-## Next task: P6, daily driver on the development machine
+## Next task: P6, the migration (the next steps need the machine's owner)
 
-P5 was accepted on 2026-11-14 (STATUS). P6 is in `docs/ROADMAP.md`; the machine is described in `docs/reference/dev-machine.md`. It is the first phase on real hardware, and the host is the user's working desktop, so **every step that touches the host's boot setup, disks or desktop config needs the user**: the agent plans, builds and tests in VMs, and the user runs the host steps.
+Everything P6 can prove in a VM is built and passing (STATUS has the table). What is left touches the host's disks and firmware, so **the owner runs it** and the agent prepares, tests in VMs, and fixes what the machine shows.
 
-Suggested order:
-1. **A P6 plan with the user:** what can be proven in VMs first, and the migration's order and safety net (a verified home backup and a recovery USB for the current system before anything is installed).
-2. **Gaps that VMs can close first** (STATUS, "Carried over"): the hibernation swapfile option in the installer, Windows chainload detection (`FIND_BOOTLOADERS=yes`), three outputs with one portrait (`run-vm --outputs 3`), and the interactive gum TUI, which only `--config` has exercised.
-3. **Real hardware:** `pyre hw` against the RTX 3060 Ti (`nvidia-open-dkms`), VRR at 240 Hz, suspend and hibernate, the peripherals, Bluetooth.
-4. **The author's overlay repo** (keybind extras, monitor layout, fonts, the personal Quickshell toys; ADR 0005), kept out of distribution defaults.
-5. **Migrate**, then a week of daily use with issues logged (the exit criterion).
+1. **Owner: rebuild the ISO**, so it carries `pyre-installer` 0.4.0, `pyre-cli` 0.3.1 and `pyre-desktop` 0.3.2:
+
+   ```sh
+   tools/build-pkgs && sudo tools/build-iso
+   ```
+
+   Then anyone runs the VM tests on it, without `--local-packages`: `tools/test-iso`, `tools/test-machine`, `tools/test-nvidia`, `tools/test-e2e`. Record the results in STATUS.
+2. **Owner: the safety net and the install**, step by step in `docs/reference/migration.md`: the home archive, the whole-disk image, the USB stick started through its **"UEFI:"** entry (the machine boots in BIOS mode today), then `pyre-install` onto the 120 GB SSD with autologin and hibernation.
+3. **On the installed machine:** `tools/hw-report`, then the overlay (`../pyre-overlay`, `./install`). Check what only hardware shows: the output names, 240 Hz and VRR, suspend and hibernate, Bluetooth, the USB audio, the bar on the portrait screen, the Windows entry.
+4. **Fix what the machine shows.** Log each issue in STATUS's P6 table; critical ones block the exit.
+5. **A week of daily use** with the issues logged is the exit criterion (ROADMAP).
+
+While waiting for the owner, work that needs no hardware:
+
+- Bundles in the installer (ARCHITECTURE: "still to come"). The offline repository does not carry bundle packages, so an offline install can only offer them when a network is up.
+- Report upstream: limine-snapper-sync's rough edges (STATUS), and the "EFI fallback" entry `limine-install` makes of Limine's own fallback copy.
 
 Standing facts:
 - **The testing channel** (`docs/BUILDING.md`): every push to `main` publishes signed packages, so **any package change needs a `pkgver`/`pkgrel` bump**; `tools/check` runs `tools/check-bumps`. The release key's subkey is in the Actions secret `PYRE_SIGNING_SUBKEY` (`docs/reference/release-key.md`).
 - **Install images** are not published yet. CI needs a privileged container for mkarchiso, and the ISO is over GitHub's 2 GiB per-asset limit. They unlock the landing page's "Install" pill (P7, or earlier if wanted).
 - **Brand assets:** `docs/images/` (wordmark, preview, avatar; `tools/render-avatar`), the landing page at <https://bayrock.github.io/pyre-os/>. Themes and wallpapers come from `tools/theme-palettes` and `tools/render-wallpaper`.
-- **VM tests:** `tools/test-e2e`, `test-iso`, `test-upgrade`, `test-channel`, `test-theme`, `test-splash`, `test-visual` (each prints its usage with `--help`). Boot surfaces are captured only without GL (`--display none`); niri skips software renderers, so desktop captures need GL and come from niri's own screenshots.
+- **VM tests:** `tools/test-e2e`, `test-machine`, `test-nvidia`, `test-iso`, `test-upgrade`, `test-channel`, `test-theme`, `test-splash`, `test-visual` (each prints its usage with `--help`). Boot surfaces are captured only without GL (`--display none`); niri skips software renderers, so desktop captures need GL and come from niri's own screenshots.
+- **The overlay** is the author's own repository, outside this one and never part of the distribution. It holds personal settings only (ADR 0005, `docs/reference/dev-machine.md`).
 
 ## Dev loop reference
 
-- **Full e2e:** `tools/test-e2e` (about 15 minutes), and `tools/test-iso` (about 2 minutes).
-- **Resume:** `tools/test-e2e --from first-boot|snapshot-boot|rollback` reuses the existing `build/vm/test-e2e` disk.
-- **No ISO rebuild:**
-  1. Serve `build/` with `python3 -I -m http.server 8080 --bind 127.0.0.1 --directory build`.
-  2. Boot an ISO with `tools/run-vm --name test-e2e --fresh --display none <iso>`. `bootstrap-e2e.sh` installs the host's newest `pyre-installer` and installs everything from the network, so new packages in `build/repo` need no ISO rebuild.
-  3. Type `curl -fsS 10.0.2.2:8080/dev/bootstrap-offline.sh | bash`, which installs offline with the host's newest `pyre-installer`, or `bootstrap-e2e.sh` for a network install.
-  4. Run `tools/test-e2e --from first-boot`.
-
-  For the upgrade test, `bootstrap-upgrade.sh` installs into `build/vm/test-upgrade` with `pyre_repo` at `/upgrade/repo`. Then run `tools/test-upgrade --from upgrade`.
-
-  The `build/dev/` scripts are untracked and dev only.
+- **Full e2e:** `tools/test-e2e` (about 15 minutes), `tools/test-machine` (about 8), `tools/test-nvidia` (about 12: DKMS builds the driver for both kernels), and `tools/test-iso` (about 2 minutes).
+- **Resume:** `--from STAGE` reuses the disk a previous run left in `build/vm/<tool>/`.
+- **No ISO rebuild:** `tools/build-pkgs`, then `--local-packages` on `test-e2e`, `test-machine` or `test-nvidia`. The newest packages in `build/repo` replace the ISO's own in the live medium's offline repository and its installer, so the install is still offline.
+- **By hand:** `tools/run-vm` and `tools/vm-ctl` (`docs/BUILDING.md`). A guest reaches files in `build/vm/<name>/share/` with `mount -t 9p -o trans=virtio pyre-share /mnt`.
 - **ISO rebuilds** need the user to run `sudo tools/build-iso`. A first vendored-package build needs `tools/build-pkgs` in a terminal, for the chroot sudo. Batch requests for both.
 
 ## Boundaries

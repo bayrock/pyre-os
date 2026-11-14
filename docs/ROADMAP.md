@@ -52,7 +52,7 @@ Phases run in order. A phase is accepted only when its exit criteria pass with e
 - Add a welcome/onboarding flow and user documentation.
 - **Exit when:** switching themes updates every covered app live, and a full visual review passes from boot splash to lock screen.
 
-## P6: Daily driver on the development machine (next)
+## P6: Daily driver on the development machine (active)
 
 - Cover the hardware and setup on the development machine:
   - an NVIDIA RTX 3060 Ti
