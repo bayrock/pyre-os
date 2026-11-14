@@ -1,4 +1,11 @@
-# PyreOS
+<h1>
+  <a href="https://bayrock.github.io/pyre-os/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/images/wordmark-dark.png">
+      <img src="docs/images/wordmark-light.png" alt="PyreOS" height="64">
+    </picture>
+  </a>
+</h1>
 
 PyreOS is a polished, keyboard-first Arch Linux desktop built on [Niri](https://github.com/niri-wm/niri) and [Noctalia](https://github.com/noctalia-dev/noctalia). It is a humble, community-run project that aims for:
 
@@ -6,6 +13,8 @@ PyreOS is a polished, keyboard-first Arch Linux desktop built on [Niri](https://
 - everything can be rolled back, including your home directory
 - one cohesive look from boot splash to lock screen
 - a codebase small enough to read in an afternoon
+
+![PyreOS from boot to desktop: the Limine boot menu, the disk unlock and boot splash, the login screen, and the welcome panel with its built-in guide](docs/images/preview.jpg)
 
 > **Status:** early development. The live ISO installs an encrypted, snapshot-protected niri + Noctalia desktop offline, with the `pyre` lifecycle tool (P4 accepted), signed packages on a hosted testing channel, and four themes with a welcome panel (P5, in review). See [docs/STATUS.md](docs/STATUS.md).
 
