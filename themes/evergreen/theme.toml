@@ -1,0 +1,9 @@
+# Evergreen: the pines at dusk (ADR 0015). Deep green surfaces, a moss
+# accent and a lantern's amber.
+name = "Evergreen"
+description = "Deep forest-green surfaces with moss and lantern-amber accents"
+mode = "dark"
+# The cabin at dusk in the pines (tools/render-wallpaper; CC BY-SA 4.0).
+wallpaper = "wallpapers/evergreen.jpg"
+# A wide crop around the cabin, for panels such as the welcome panel.
+banner = "wallpapers/evergreen-banner.jpg"

@@ -57,10 +57,12 @@ tools/check-bumps || fail check-bumps
 
 step "themes"
 tools/check-themes || fail check-themes
-tools/ember-palette 2>/dev/null | cmp -s - themes/ember/palette.json ||
-  fail "themes/ember/palette.json differs from tools/ember-palette's output"
-tools/render-wallpaper --print-svg | cmp -s - themes/ember/wallpapers/ember.svg ||
-  fail "themes/ember/wallpapers/ember.svg is stale: run tools/render-wallpaper"
+tools/theme-palettes --check || fail "a palette.json differs from tools/theme-palettes' output"
+for theme in themes/*/; do
+  theme="$(basename -- "$theme")"
+  tools/render-wallpaper --print-svg "$theme" | cmp -s - "themes/$theme/wallpapers/$theme.svg" ||
+    fail "themes/$theme/wallpapers/$theme.svg is stale: run tools/render-wallpaper $theme"
+done
 
 if [[ -d tests ]] && find tests -name '*.bats' -print -quit | grep -q .; then
   step "bats"

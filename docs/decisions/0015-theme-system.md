@@ -38,8 +38,15 @@ ADR 0005 already requires that "the theme system must drive Noctalia's palette, 
   - `primary`, `secondary` and `tertiary` are the fire ramp: orange, gold and coral
   - text is the page's cream
   - it is dark only, like the page
-  - `tools/ember-palette` derives `palette.json` from those OKLCH values, and `tools/check` keeps the two in sync
+  - `tools/theme-palettes` derives `palette.json` from those OKLCH values, and `tools/check` keeps the two in sync
   - its wallpaper is the landing page's cabin at night, generated from the site's own woods SVG and color tokens by `tools/render-wallpaper`. It is CC BY-SA 4.0 like all PyreOS artwork, and `tools/check` keeps its SVG in sync with the site
+- **The curated alternatives are original too** (amended 2026-11-14). Each is the same cabin at another hour or season, generated with Ember by `tools/theme-palettes` and `tools/render-wallpaper`, and held to the same contrast checks:
+  - **Birch**, light: the cabin on a summer morning. Birch-bark paper, timber ink, and the fire ramp darkened to hold cream text.
+  - **Evergreen**, dark: dusk in the pines, with moss and lantern-amber accents.
+  - **Frost**, dark: a snowy, moonlit night, with ice and window-gold accents.
+  - Ember's palette carries Birch as its `light` variant, and Birch's carries Ember as its `dark` one, so Noctalia's dark/light switch moves between night and day. Evergreen and Frost are dark only, and Noctalia uses their dark variant in both modes.
+  - Noctalia's own built-in palettes (Catppuccin, Nord, Gruvbox and others) stay one click away in its settings, so PyreOS does not repackage them.
+  - Each theme also names a `banner`, a wide crop of its wallpaper around the cabin, for panels such as the welcome panel (ADR 0016).
 - **matugen is not used.** Noctalia's engine replaces it.
 - **Boot surfaces wear Ember, whatever the user's theme.** The boot menu, the splash and the ISO belong to the machine, which can have several users with different themes, so they carry the distribution's identity, not one user's choice.
   - **Limine:** `pyre-base` keeps a marked block at the top of `limine.conf` (Limine reads global options anywhere in the file, and `limine-entry-tool` keeps foreign lines). The block sets the PyreOS branding, Ember's colors, and a 1920×1080 copy of the wallpaper on the ESP, `/pyre/wallpaper.jpg`.

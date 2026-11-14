@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the Ember wallpaper from the landing page's scene (ADR 0015).
+"""Render every theme's wallpaper from the landing page's scene (ADR 0015).
 
 The cabin, the two treelines and the colors are read from landing/site/
 (index.html's woods SVG and site.css's tokens), so the wallpaper and the site
@@ -8,14 +8,19 @@ repeatable star field, the warm horizon glow, and the chimney's embers frozen
 mid-rise. The scene sits low and slightly right of centre, so a crop to any
 monitor shape (Noctalia's default fill mode) keeps the cabin.
 
-Writes themes/ember/wallpapers/ember.svg (the source) and, with rsvg-convert
-and ImageMagick, ember.jpg at 3840x2160 with a fine grain against banding,
-plus the boot menu's 1920x1080 copy for Limine,
+The other themes are the same cabin at another hour or season (SCENES):
+Birch on a summer morning, Evergreen at dusk, Frost on a snowy night.
+
+Writes themes/<id>/wallpapers/<id>.svg (the source) and, with rsvg-convert
+and ImageMagick, <id>.jpg at 3840x2160 with a fine grain against banding,
+and <id>-banner.jpg, a 1640x400 crop around the cabin for wide panels.
+For Ember also the boot menu's 1920x1080 copy for Limine,
 packages/pyre-base/limine-wallpaper.jpg, and the ISO's 640x480 BIOS menu
 background, iso/syslinux/splash.png (a centred 4:3 crop).
 
-Usage: tools/render-wallpaper [--svg-only | --print-svg]
-  --print-svg   print the SVG only (tools/check compares it with ember.svg)
+Usage: tools/render-wallpaper [--svg-only] [THEME ...]   (default: every theme)
+       tools/render-wallpaper --print-svg [THEME]      (default: ember)
+  --print-svg   print one SVG only (tools/check compares each with the file)
 """
 import math
 import pathlib
@@ -27,7 +32,6 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SITE = ROOT / "landing" / "site"
-OUT = ROOT / "themes" / "ember" / "wallpapers"
 BOOT = ROOT / "packages" / "pyre-base" / "limine-wallpaper.jpg"
 ISO_SPLASH = ROOT / "iso" / "syslinux" / "splash.png"
 W, H = 3840, 2160
@@ -64,7 +68,7 @@ def tokens():
     return out
 
 
-def woods(colors):
+def woods(colors, extra=""):
     """index.html's woods SVG body, with its CSS classes resolved to fills."""
     html = (SITE / "index.html").read_text()
     m = re.search(r'<svg class="woods" viewBox="0 0 1600 400"[^>]*>(.*?)</svg>', html, re.S)
@@ -77,42 +81,108 @@ def woods(colors):
         body = body.replace(f'class="{cls}"', f'fill="{colors[token]}"')
     if "class=" in body:
         sys.exit("render-wallpaper: an unmapped class is left in the woods SVG")
-    return body.strip()
+    return body.strip() + extra
 
 
-def stars(rng, colors):
+def stars(rng, colors, count=260, brightness=1.0):
     """A seeded star field: denser and brighter high up, none near the trees."""
     out = []
-    for _ in range(260):
+    for _ in range(count):
         x = rng.uniform(0, W)
         y = H * 0.72 * (rng.random() ** 1.6)          # bias toward the top
         r = rng.choice((1.3, 1.6, 2.0, 2.0, 2.6, 3.2))
         fade = 1 - y / (H * 0.72)
-        alpha = round(rng.uniform(0.25, 0.75) * (0.35 + 0.65 * fade), 3)
+        alpha = round(rng.uniform(0.25, 0.75) * (0.35 + 0.65 * fade) * brightness, 3)
         out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{colors["star"]}" opacity="{alpha}"/>')
     return "\n    ".join(out)
 
 
-def embers(colors):
-    """The five chimney embers frozen along the landing page's rise path."""
+def embers(colors, smoke=False):
+    """The five chimney embers frozen along the landing page's rise path, or
+    by day, five puffs of smoke on the same path."""
     # (delay, colour, dx) from site.css; t is how far along its rise each one is.
     path = [(0.18, "gold", 8), (0.42, "orange", -14), (0.61, "coral", 10), (0.78, "gold", -6), (0.9, "orange", 16)]
     radius = (4.5, 3.8, 3.4, 4.0, 3.2)
     out = []
     for (t, colour, dx), r in zip(path, radius):
         cx, cy = 949 + dx * t, 278 - 150 * t
+        if smoke:
+            out.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{(5 + 16 * t):.2f}" fill="{colors["smoke"]}" '
+                       f'opacity="{round(0.5 * (1 - t) + 0.08, 3)}"/>')
+            continue
         opacity = round(min(1.0, (1 - t) * 1.35), 3)
         out.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r * (1 - 0.5 * t):.2f}" fill="{colors[colour]}" opacity="{opacity}"/>')
     return "\n      ".join(out)
 
 
-def svg():
+def snow(colors, rng):
+    """Frost's snow: a cap on the roof, the near ground under snow, and
+    flakes falling across the whole sky."""
+    s = colors["snow"]
+    scene = (f'\n      <path fill="{s}" d="M851 330 L915 283 L979 330 L969 330 L915 292 L861 330 Z"/>'
+             f'\n      <rect fill="{s}" x="-10" y="374" width="1620" height="34"/>')
+    flakes = []
+    for _ in range(170):
+        x, y = rng.uniform(0, W), rng.uniform(0, H)
+        r = rng.choice((2.0, 2.6, 3.2, 4.0, 5.0))
+        flakes.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{s}" opacity="{round(rng.uniform(0.25, 0.7), 3)}"/>')
+    return scene, "\n  ".join(flakes)
+
+
+def ember_colors():
     colors = tokens()
     colors["star"] = oklch_hex(0.9, 0.03, 80)
-    rng = random.Random(58)                              # Ember's hue: a fixed, repeatable sky
+    return colors
+
+
+# Each theme's scene: the same cabin at another hour or season (ADR 0015).
+# "seed" fixes the sky; the colors not named fall back to Ember's.
+SCENES = {
+    "ember": {"seed": 58},
+    "birch": {"seed": 85, "stars": 0, "smoke": True, "body": "a summer morning",
+              "sky": (0.86, 0.04, 230), "bg": (0.95, 0.03, 85), "surface-far": (0.78, 0.035, 150),
+              "surface-near": (0.56, 0.06, 150), "cabin": (0.50, 0.07, 52), "roof": (0.37, 0.05, 45),
+              "smoke": (0.97, 0.005, 90), "horizon": ("gold", 0.30),
+              "orb": (0.18, 0.2, 120, (0.98, 0.05, 95), 0.5)},
+    "evergreen": {"seed": 160, "stars": 90, "star_brightness": 0.7, "body": "dusk in the pines",
+                  "sky": (0.21, 0.04, 255), "bg": (0.40, 0.08, 55), "surface-far": (0.26, 0.035, 160),
+                  "surface-near": (0.19, 0.03, 160), "cabin": (0.33, 0.045, 52), "roof": (0.22, 0.03, 48),
+                  "horizon": ("orange", 0.28)},
+    "frost": {"seed": 255, "stars": 220, "snow": (0.93, 0.02, 245), "body": "a winter night",
+              "sky": (0.15, 0.03, 262), "bg": (0.25, 0.045, 250), "surface-far": (0.21, 0.03, 250),
+              "surface-near": (0.17, 0.03, 250), "cabin": (0.33, 0.04, 52), "roof": (0.25, 0.03, 48),
+              "star": (0.93, 0.03, 240), "horizon": ("gold", 0.10),
+              "orb": (0.2, 0.17, 70, (0.95, 0.03, 240), 0.35)},
+}
+
+
+def svg(theme="ember"):
+    scene = SCENES[theme]
+    colors = ember_colors()
+    for key in ("sky", "bg", "surface-far", "surface-near", "cabin", "roof", "star", "smoke", "snow"):
+        if key in scene:
+            colors[key] = oklch_hex(*scene[key])
+    rng = random.Random(scene["seed"])                   # the theme's hue: a fixed, repeatable sky
     scene_h = W / 4                                      # the woods' 1600x400 at full width
+    horizon, horizon_opacity = scene.get("horizon", ("orange", 0.16))
+    title = "Ember, the PyreOS wallpaper" if theme == "ember" else \
+        f"{theme.capitalize()}, a PyreOS wallpaper: the Ember cabin on {scene['body']}"
+    sky = stars(rng, colors, scene.get("stars", 260), scene.get("star_brightness", 1.0)) if scene.get("stars", 260) else ""
+    orb = orb_defs = ""
+    if "orb" in scene:                                   # a sun by day, a moon on the snow
+        x, y, r, color, glow = scene["orb"]
+        c = oklch_hex(*color)
+        orb_defs = f'''
+    <radialGradient id="orb">
+      <stop offset="0" stop-color="{c}" stop-opacity="{glow}"/>
+      <stop offset="1" stop-color="{c}" stop-opacity="0"/>
+    </radialGradient>'''
+        orb = (f'\n  <circle cx="{W * x:.0f}" cy="{H * y:.0f}" r="{r * 5}" fill="url(#orb)"/>'
+               f'\n  <circle cx="{W * x:.0f}" cy="{H * y:.0f}" r="{r}" fill="{c}"/>')
+    extra, flakes = snow(colors, rng) if "snow" in scene else ("", "")
+    flakes = f"\n  <g>\n  {flakes}\n  </g>" if flakes else ""
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
-  <!-- Ember, the PyreOS wallpaper. Generated by tools/render-wallpaper from
+  <!-- {title}. Generated by tools/render-wallpaper from
        landing/site/ (the woods and the colors); edit those or the tool, not this file.
        CC BY-SA 4.0, PyreOS contributors (LICENSE-ARTWORK). -->
   <defs>
@@ -121,54 +191,78 @@ def svg():
       <stop offset="1" stop-color="{colors["bg"]}"/>
     </linearGradient>
     <radialGradient id="horizon" cx="0.57" cy="1" r="1" gradientTransform="translate(0.57 1) scale(0.6 0.45) translate(-0.57 -1)">
-      <stop offset="0" stop-color="{colors["orange"]}" stop-opacity="0.16"/>
-      <stop offset="1" stop-color="{colors["orange"]}" stop-opacity="0"/>
+      <stop offset="0" stop-color="{colors[horizon]}" stop-opacity="{horizon_opacity}"/>
+      <stop offset="1" stop-color="{colors[horizon]}" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="glow">
       <stop offset="0" stop-color="{colors["gold"]}" stop-opacity="0.45"/>
       <stop offset="0.4" stop-color="{colors["orange"]}" stop-opacity="0.16"/>
       <stop offset="1" stop-color="{colors["orange"]}" stop-opacity="0"/>
-    </radialGradient>
+    </radialGradient>{orb_defs}
   </defs>
   <rect width="{W}" height="{H}" fill="url(#sky)"/>
   <g>
-    {stars(rng, colors)}
-  </g>
+    {sky}
+  </g>{orb}
   <rect width="{W}" height="{H}" fill="url(#horizon)"/>
   <svg x="0" y="{H - scene_h:.0f}" width="{W}" height="{scene_h:.0f}" viewBox="0 0 1600 400">
     <g>
-      {woods(colors)}
-      {embers(colors)}
+      {woods(colors, extra)}
+      {embers(colors, scene.get("smoke", False))}
     </g>
-  </svg>
+  </svg>{flakes}
 </svg>
 '''
 
 
+def to_jpg(png, out):
+    # A fine grain hides the 8-bit banding of the sky gradient.
+    subprocess.run(["magick", str(png), "-seed", "58", "-attenuate", "0.2", "+noise", "Gaussian",
+                    "-strip", "-sampling-factor", "4:4:4", "-quality", "88", str(out)], check=True)
+
+
 def main(argv):
-    if "--print-svg" in argv:
-        sys.stdout.write(svg())
+    if argv[:1] == ["--print-svg"]:
+        theme = argv[1] if len(argv) > 1 else "ember"
+        if theme not in SCENES:
+            sys.exit(f"render-wallpaper: no scene {theme} (one of {', '.join(SCENES)})")
+        sys.stdout.write(svg(theme))
         return 0
-    OUT.mkdir(parents=True, exist_ok=True)
-    source = OUT / "ember.svg"
-    source.write_text(svg())
-    if "--svg-only" in argv:
-        return 0
-    with tempfile.TemporaryDirectory() as tmp:
-        png = pathlib.Path(tmp) / "ember.png"
-        subprocess.run(["rsvg-convert", "-w", str(W), "-h", str(H), "-o", str(png), str(source)], check=True)
-        # A fine grain hides the 8-bit banding of the dark sky gradient.
-        subprocess.run(["magick", str(png), "-seed", "58", "-attenuate", "0.2", "+noise", "Gaussian",
-                        "-strip", "-sampling-factor", "4:4:4", "-quality", "88", str(OUT / "ember.jpg")], check=True)
-        # Limine decodes this itself at boot: half the size, baseline JPEG.
-        subprocess.run(["magick", str(png), "-resize", "1920x1080", "-seed", "58", "-attenuate", "0.2",
-                        "+noise", "Gaussian", "-strip", "-interlace", "none", "-sampling-factor", "4:2:0",
-                        "-quality", "85", str(BOOT)], check=True)
-        # syslinux's vesamenu needs exactly 640x480; a 4:3 crop keeps the cabin.
-        subprocess.run(["magick", str(png), "-resize", "x480", "-gravity", "center", "-crop", "640x480+0+0",
-                        "+repage", "-strip", f"PNG24:{ISO_SPLASH}"], check=True)
-    print(f"wrote {source.relative_to(ROOT)}, {(OUT / 'ember.jpg').relative_to(ROOT)}, "
-          f"{BOOT.relative_to(ROOT)} and {ISO_SPLASH.relative_to(ROOT)}")
+    themes = [a for a in argv if not a.startswith("--")] or list(SCENES)
+    wrote = []
+    for theme in themes:
+        if theme not in SCENES:
+            sys.exit(f"render-wallpaper: no scene {theme} (one of {', '.join(SCENES)})")
+        out = ROOT / "themes" / theme / "wallpapers"
+        out.mkdir(parents=True, exist_ok=True)
+        source = out / f"{theme}.svg"
+        source.write_text(svg(theme))
+        wrote.append(source)
+        if "--svg-only" in argv:
+            continue
+        with tempfile.TemporaryDirectory() as tmp:
+            png = pathlib.Path(tmp) / f"{theme}.png"
+            subprocess.run(["rsvg-convert", "-w", str(W), "-h", str(H), "-o", str(png), str(source)], check=True)
+            to_jpg(png, out / f"{theme}.jpg")
+            # The banner for wide panels (the welcome panel): the cabin and
+            # the sky above it, 1640x400 (820x200 at 2x).
+            banner = pathlib.Path(tmp) / "banner.png"
+            subprocess.run(["magick", str(png), "-crop", "3280x800+556+1360", "+repage",
+                            "-resize", "1640x400", str(banner)], check=True)
+            to_jpg(banner, out / f"{theme}-banner.jpg")
+            wrote += [out / f"{theme}.jpg", out / f"{theme}-banner.jpg"]
+            if theme != "ember":
+                continue
+            # Boot surfaces wear Ember. Limine decodes this itself at boot:
+            # half the size, baseline JPEG.
+            subprocess.run(["magick", str(png), "-resize", "1920x1080", "-seed", "58", "-attenuate", "0.2",
+                            "+noise", "Gaussian", "-strip", "-interlace", "none", "-sampling-factor", "4:2:0",
+                            "-quality", "85", str(BOOT)], check=True)
+            # syslinux's vesamenu needs exactly 640x480; a 4:3 crop keeps the cabin.
+            subprocess.run(["magick", str(png), "-resize", "x480", "-gravity", "center", "-crop", "640x480+0+0",
+                            "+repage", "-strip", f"PNG24:{ISO_SPLASH}"], check=True)
+            wrote += [BOOT, ISO_SPLASH]
+    print("wrote " + ", ".join(str(p.relative_to(ROOT)) for p in wrote))
     return 0
 
 

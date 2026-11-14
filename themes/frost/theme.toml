@@ -1,0 +1,9 @@
+# Frost: a winter night at the cabin (ADR 0015). Blue snow-light surfaces,
+# an ice accent, and the lit window's gold.
+name = "Frost"
+description = "Cold blue night surfaces with ice and window-gold accents"
+mode = "dark"
+# The cabin on a snowy, moonlit night (tools/render-wallpaper; CC BY-SA 4.0).
+wallpaper = "wallpapers/frost.jpg"
+# A wide crop around the cabin, for panels such as the welcome panel.
+banner = "wallpapers/frost-banner.jpg"

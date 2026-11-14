@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+"""Derive every PyreOS theme's palette (themes/<id>/palette.json), ADR 0015.
+
+All four are one cabin in the woods at different hours and seasons, each
+from a handful of OKLCH colors defined here; tune them here, not in the JSON.
+
+  ember      firelight on a dark night, the landing page's own tokens
+             (landing/site/site.css). Its light variant is Birch.
+  birch      the same cabin by day: birch-bark paper and the fire ramp
+             darkened to read on it. Its dark variant is Ember, so
+             Noctalia's dark/light toggle moves between the two.
+  evergreen  the pines at dusk: deep green, moss and a lantern's amber.
+  frost      a winter night: blue snow light, ice and the lit window's gold.
+
+Contrast is checked here (stderr) and again by tools/check-themes.
+
+Usage: tools/theme-palettes            write every palette.json
+       tools/theme-palettes --check    exit 1 if a shipped file differs
+       tools/theme-palettes --print ID print one palette on stdout
+"""
+import json
+import math
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+
+def oklch(L, C, h):
+    a, b = C * math.cos(math.radians(h)), C * math.sin(math.radians(h))
+    l_ = L + 0.3963377774 * a + 0.2158037573 * b
+    m_ = L - 0.1055613458 * a - 0.0638541728 * b
+    s_ = L - 0.0894841775 * a - 1.2914855480 * b
+    l, m, s = l_ ** 3, m_ ** 3, s_ ** 3
+    rgb = (4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+           -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+           -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)
+
+    def enc(x):
+        x = min(max(x, 0.0), 1.0)
+        return 12.92 * x if x <= 0.0031308 else 1.055 * x ** (1 / 2.4) - 0.055
+    return "#" + "".join(f"{round(enc(c) * 255):02x}" for c in rgb)
+
+
+def lum(hexc):
+    def lin(c):
+        c = int(c, 16) / 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (lin(hexc[i:i + 2]) for i in (1, 3, 5))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast(a, b):
+    la, lb = sorted((lum(a), lum(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+ANSI_HUE = {"red": 30, "green": 130, "yellow": 80, "blue": 245, "magenta": 350, "cyan": 195}
+
+
+def ansi(L, C):
+    return {k: oklch(L, C if k != "yellow" else C + 0.02, h) for k, h in ANSI_HUE.items()}
+
+
+def variant(c):
+    """A Noctalia format-2 variant from a theme's named colors."""
+    return {
+        "primary": c["primary"], "on_primary": c["on_accent"],
+        "secondary": c["secondary"], "on_secondary": c["on_accent"],
+        "tertiary": c["tertiary"], "on_tertiary": c["on_accent"],
+        "error": c["error"], "on_error": c["on_accent"],
+        "surface": c["bg"], "on_surface": c["fg"], "on_surface_variant": c["muted"],
+        "surface_container": c["container"], "outline_variant": c["outline"],
+        "shadow": c["shadow"], "hover": c["hover"], "on_hover": c["fg"],
+        "terminal": {
+            "background": c["bg"], "foreground": c["text"], "cursor": c["primary"],
+            "cursor_text": c["cursor_text"], "selection_bg": c["select"], "selection_fg": c["fg"],
+            "normal": c["normal"], "bright": c["bright"],
+        },
+    }
+
+
+def ember():
+    # Landing page tokens, verbatim.
+    coral, orange, gold, cream = "#e96d51", "#d9803c", "#e9b851", "#fdfceb"
+    sky = oklch(0.17, 0.012, 58)
+    text = oklch(0.94, 0.02, 85)
+    normal = {"black": oklch(0.30, 0.02, 58), **ansi(0.72, 0.11), "white": oklch(0.84, 0.02, 80)}
+    bright = {"black": oklch(0.62, 0.03, 60), **ansi(0.80, 0.10), "white": text}
+    normal["yellow"], bright["yellow"] = gold, oklch(0.86, 0.12, 85)
+    normal["red"] = coral
+    return {
+        "primary": orange, "secondary": gold, "tertiary": coral, "on_accent": sky,
+        "error": oklch(0.66, 0.20, 25),
+        "bg": oklch(0.205, 0.014, 58), "container": oklch(0.235, 0.018, 58),
+        "fg": cream, "muted": oklch(0.76, 0.035, 70), "text": text,
+        # Added for the desktop, on the same hue: a stronger outline, a hover
+        # wash, and terminal text a touch softer than the cream headline.
+        "outline": oklch(0.40, 0.035, 58), "hover": oklch(0.32, 0.04, 58),
+        "select": oklch(0.40, 0.07, 55), "shadow": "#000000", "cursor_text": sky,
+        "normal": normal, "bright": bright,
+    }
+
+
+def birch():
+    # Birch-bark paper; ink the colour of the cabin's timber. The fire ramp
+    # keeps its hues but drops to a lightness that holds cream text.
+    paper, ink = oklch(0.975, 0.012, 85), oklch(0.27, 0.03, 55)
+    normal = {"black": ink, **ansi(0.50, 0.13), "white": oklch(0.86, 0.015, 80)}
+    bright = {"black": oklch(0.50, 0.025, 65), **ansi(0.44, 0.15), "white": oklch(0.93, 0.012, 85)}
+    normal["yellow"], bright["yellow"] = oklch(0.52, 0.11, 75), oklch(0.47, 0.11, 70)
+    return {
+        "primary": oklch(0.55, 0.15, 50), "secondary": oklch(0.53, 0.11, 75),
+        "tertiary": oklch(0.53, 0.15, 33), "on_accent": oklch(0.985, 0.01, 90),
+        "error": oklch(0.50, 0.19, 25),
+        "bg": paper, "container": oklch(0.945, 0.016, 82),
+        "fg": ink, "muted": oklch(0.45, 0.03, 60), "text": ink,
+        "outline": oklch(0.83, 0.025, 70), "hover": oklch(0.90, 0.035, 70),
+        "select": oklch(0.86, 0.06, 70), "shadow": oklch(0.30, 0.03, 55), "cursor_text": paper,
+        "normal": normal, "bright": bright,
+    }
+
+
+def evergreen():
+    sky, h = oklch(0.165, 0.016, 160), 160
+    text = oklch(0.94, 0.02, 120)
+    normal = {"black": oklch(0.30, 0.022, h), **ansi(0.72, 0.11), "white": oklch(0.84, 0.02, 120)}
+    bright = {"black": oklch(0.62, 0.03, 150), **ansi(0.80, 0.10), "white": text}
+    normal["yellow"], bright["yellow"] = oklch(0.80, 0.13, 80), oklch(0.86, 0.12, 88)
+    return {
+        "primary": oklch(0.74, 0.12, 140), "secondary": oklch(0.80, 0.13, 78),
+        "tertiary": oklch(0.74, 0.09, 190), "on_accent": sky,
+        "error": oklch(0.66, 0.20, 25),
+        "bg": oklch(0.205, 0.018, h), "container": oklch(0.235, 0.022, h),
+        "fg": oklch(0.97, 0.02, 110), "muted": oklch(0.76, 0.035, 140), "text": text,
+        "outline": oklch(0.40, 0.035, h), "hover": oklch(0.32, 0.045, h),
+        "select": oklch(0.40, 0.07, 150), "shadow": "#000000", "cursor_text": sky,
+        "normal": normal, "bright": bright,
+    }
+
+
+def frost():
+    sky, h = oklch(0.165, 0.025, 255), 255
+    text = oklch(0.94, 0.015, 240)
+    normal = {"black": oklch(0.30, 0.03, h), **ansi(0.72, 0.11), "white": oklch(0.84, 0.02, 240)}
+    bright = {"black": oklch(0.62, 0.035, 250), **ansi(0.80, 0.10), "white": text}
+    normal["yellow"], bright["yellow"] = oklch(0.82, 0.12, 85), oklch(0.88, 0.11, 90)
+    return {
+        "primary": oklch(0.78, 0.10, 230), "secondary": oklch(0.82, 0.12, 85),
+        "tertiary": oklch(0.76, 0.09, 300), "on_accent": sky,
+        "error": oklch(0.66, 0.20, 25),
+        "bg": oklch(0.205, 0.028, h), "container": oklch(0.235, 0.032, h),
+        "fg": oklch(0.97, 0.01, 240), "muted": oklch(0.77, 0.035, 240), "text": text,
+        "outline": oklch(0.40, 0.045, h), "hover": oklch(0.32, 0.055, h),
+        "select": oklch(0.40, 0.08, 245), "shadow": "#000000", "cursor_text": sky,
+        "normal": normal, "bright": bright,
+    }
+
+
+def palettes():
+    e, b = variant(ember()), variant(birch())
+    return {
+        "ember": {"version": 2, "dark": e, "light": b},
+        "birch": {"version": 2, "dark": e, "light": b},
+        "evergreen": {"version": 2, "dark": variant(evergreen())},
+        "frost": {"version": 2, "dark": variant(frost())},
+    }
+
+
+def report(theme, mode, v):
+    """Contrast checks for one variant; returns the number that fail."""
+    t, s = v["terminal"], v["surface"]
+    checks = [("on_surface/surface", v["on_surface"], s, 7),
+              ("on_surface/container", v["on_surface"], v["surface_container"], 7),
+              ("on_surface_variant/surface", v["on_surface_variant"], s, 4.5),
+              ("on_hover/hover", v["on_hover"], v["hover"], 7),
+              ("primary/surface", v["primary"], s, 3), ("outline/surface", v["outline_variant"], s, 1.5),
+              ("term fg/bg", t["foreground"], t["background"], 7),
+              ("selection", t["selection_fg"], t["selection_bg"], 4.5)]
+    checks += [(f"on_{r}/{r}", v[f"on_{r}"], v[r], 4.5) for r in ("primary", "secondary", "tertiary", "error")]
+    # The ANSI colour nearest the background is exempt, as in tools/check-themes.
+    skip = {("normal", "black")} if mode == "dark" else {("normal", "white"), ("bright", "white")}
+    checks += [(f"{g} {k}/bg", t[g][k], t["background"], 4.5)
+               for g in ("normal", "bright") for k in t[g] if (g, k) not in skip]
+    bad = 0
+    for name, fg, bg, need in checks:
+        c = contrast(fg, bg)
+        bad += c < need
+        print(f"{'ok ' if c >= need else 'LOW'} {theme:9} {mode:5} {name:28} {c:5.2f} (>= {need})", file=sys.stderr)
+    return bad
+
+
+def render(palette):
+    return json.dumps(palette, indent=2) + "\n"
+
+
+def main(argv):
+    all_palettes = palettes()
+    if argv[:1] == ["--print"]:
+        if len(argv) != 2 or argv[1] not in all_palettes:
+            print(f"theme-palettes: --print takes one of {', '.join(all_palettes)}", file=sys.stderr)
+            return 2
+        sys.stdout.write(render(all_palettes[argv[1]]))
+        return 0
+    if argv == ["--check"]:
+        stale = [i for i, p in all_palettes.items()
+                 if not (ROOT / "themes" / i / "palette.json").is_file()
+                 or (ROOT / "themes" / i / "palette.json").read_text() != render(p)]
+        for i in stale:
+            print(f"theme-palettes: themes/{i}/palette.json is stale; run tools/theme-palettes", file=sys.stderr)
+        return 1 if stale else 0
+    if argv:
+        print(__doc__.split("Usage:")[1].rstrip(), file=sys.stderr)
+        return 2
+    bad = sum(report(i, m, p[m]) for i, p in all_palettes.items() for m in ("dark", "light") if m in p)
+    if bad:
+        print(f"theme-palettes: {bad} contrast check(s) failed; nothing written", file=sys.stderr)
+        return 1
+    for i, p in all_palettes.items():
+        out = ROOT / "themes" / i / "palette.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(render(p))
+    print("wrote " + ", ".join(f"themes/{i}/palette.json" for i in all_palettes))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,10 @@
+# Birch: the Ember cabin by day (ADR 0015). Birch-bark paper, timber-brown
+# ink, and the fire ramp darkened to read on it. Its palette's dark variant
+# is Ember, so Noctalia's dark/light toggle moves between the two.
+name = "Birch"
+description = "Light birch-bark surfaces with the fire accent, for daytime"
+mode = "light"
+# The cabin on a summer morning (tools/render-wallpaper; CC BY-SA 4.0).
+wallpaper = "wallpapers/birch.jpg"
+# A wide crop around the cabin, for panels such as the welcome panel.
+banner = "wallpapers/birch-banner.jpg"

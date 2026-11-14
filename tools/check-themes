@@ -2,11 +2,13 @@
 """Check every theme under themes/ (ADR 0015).
 
 Each theme directory needs a theme.toml (name, description, mode, and
-optionally a wallpaper path inside the theme) and a palette.json in
+optionally wallpaper and banner paths inside the theme) and a palette.json in
 Noctalia's palette format 2. Every color role Noctalia reads
 must be present as #rrggbb, and the text pairs must meet WCAG contrast:
 7:1 for body text, 4.5:1 for secondary text, accents' on-colors and the
-terminal's ANSI colors, 3:1 for the accent against the surface.
+terminal's ANSI colors (but the one nearest the background), 3:1 for the
+accent against the surface. A light theme needs a light variant; a dark
+variant is always needed, since Noctalia falls back to it.
 
 Usage: tools/check-themes [THEME_DIR ...]   (default: every themes/*/)
 """
@@ -37,7 +39,7 @@ def contrast(a, b):
     return (hi + 0.05) / (lo + 0.05)
 
 
-def check_variant(name, v, errors):
+def check_variant(name, mode, v, errors):
     for role in ROLES:
         if not HEX.match(str(v.get(role, ""))):
             errors.append(f"{name}: {role} must be a lowercase #rrggbb color")
@@ -60,8 +62,11 @@ def check_variant(name, v, errors):
     pairs += [(f"on_{r} on {r}", v[f"on_{r}"], v[r], 4.5) for r in ("primary", "secondary", "tertiary", "error")]
     pairs += [("terminal foreground", term["foreground"], term["background"], 7),
               ("terminal selection", term["selection_fg"], term["selection_bg"], 4.5)]
+    # The ANSI color nearest the background is exempt: black on a dark
+    # terminal, white and bright white on a light one.
+    skip = {("normal", "black")} if mode == "dark" else {("normal", "white"), ("bright", "white")}
     pairs += [(f"terminal {g}.{k}", term[g][k], term["background"], 4.5)
-              for g in ("normal", "bright") for k in ANSI if (g, k) != ("normal", "black")]
+              for g in ("normal", "bright") for k in ANSI if (g, k) not in skip]
     for label, fg, bg, need in pairs:
         ratio = contrast(fg, bg)
         if ratio < need:
@@ -82,13 +87,15 @@ def check_theme(path):
             errors.append(f"{path.name}: theme.toml needs {key}")
     if meta.get("mode") not in ("dark", "light"):
         errors.append(f"{path.name}: mode must be dark or light")
-    wallpaper = meta.get("wallpaper")
-    if wallpaper is not None:
-        target = (path / str(wallpaper)).resolve()
-        if not str(wallpaper).startswith("wallpapers/") or not target.is_relative_to(path.resolve()):
-            errors.append(f"{path.name}: wallpaper must be a path under wallpapers/")
+    for key in ("wallpaper", "banner"):
+        image = meta.get(key)
+        if image is None:
+            continue
+        target = (path / str(image)).resolve()
+        if not str(image).startswith("wallpapers/") or not target.is_relative_to(path.resolve()):
+            errors.append(f"{path.name}: {key} must be a path under wallpapers/")
         elif target.suffix not in (".jpg", ".png", ".webp") or not target.is_file():
-            errors.append(f"{path.name}: wallpaper {wallpaper} is missing or not .jpg/.png/.webp")
+            errors.append(f"{path.name}: {key} {image} is missing or not .jpg/.png/.webp")
     if not re.match(r"^[A-Za-z][A-Za-z0-9 -]*$", str(meta.get("name", ""))):
         errors.append(f"{path.name}: name becomes a file name, so letters, digits, spaces and '-' only")
     try:
@@ -100,8 +107,10 @@ def check_theme(path):
     variants = [k for k in ("dark", "light") if k in palette]
     if "dark" not in variants:
         errors.append(f"{path.name}: palette.json needs a dark variant")
+    if meta.get("mode") == "light" and "light" not in variants:
+        errors.append(f"{path.name}: a light theme needs a light variant in palette.json")
     for variant in variants:
-        check_variant(f"{path.name} ({variant})", palette[variant], errors)
+        check_variant(f"{path.name} ({variant})", variant, palette[variant], errors)
     return errors
 
 

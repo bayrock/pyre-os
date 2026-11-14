@@ -44,7 +44,7 @@ Check 360, 768, and 1280 px wide for horizontal scroll and for console or CSP er
   rsvg-convert -h 128 pyre-e.svg | magick -size 180x180 xc:#130e0a - -gravity center -composite -strip apple-touch-icon.png
   ```
 - `og.jpg` is a 1200×630 headless-Chromium screenshot of the page, converted with `magick -strip -quality 86`.
-- **The Ember wallpaper** (`themes/ember/wallpapers/`) is generated from this page's woods SVG and `site.css` tokens by `tools/render-wallpaper`. After changing the scene or the palette, run it again; `tools/check` fails while the wallpaper's SVG is stale.
+- **The theme wallpapers** (`themes/*/wallpapers/`) are generated from this page's woods SVG and `site.css` tokens by `tools/render-wallpaper`: Ember is this page's scene, and the other themes are the same cabin at another hour or season. After changing the scene or the palette, run it again; `tools/check` fails while a wallpaper's SVG is stale.
 
 ## Deploying
 

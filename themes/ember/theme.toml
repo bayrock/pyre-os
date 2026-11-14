@@ -1,8 +1,11 @@
 # The PyreOS default theme: firelight on a dark night (ADR 0015).
 # Taken from the landing page (landing/site/site.css): the surfaces are the
 # mark's orange at low chroma and lightness, the accent is the fire ramp.
+# Its palette's light variant is Birch (tools/theme-palettes).
 name = "Ember"
 description = "Warm dark surfaces with an orange, gold and coral fire accent"
 mode = "dark"
 # The landing page's cabin at night (tools/render-wallpaper; CC BY-SA 4.0).
 wallpaper = "wallpapers/ember.jpg"
+# A wide crop around the cabin, for panels such as the welcome panel.
+banner = "wallpapers/ember-banner.jpg"

@@ -3,9 +3,9 @@
 # repository, so the package is built in place. Each holds data only: a
 # theme.toml, a Noctalia palette (palette.json) and wallpapers (CC BY-SA 4.0).
 pkgname=pyre-themes
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
-pkgdesc='PyreOS themes: Ember (default)'
+pkgdesc='PyreOS themes: Ember (default), Birch, Evergreen and Frost'
 arch=(any)
 url='https://github.com/bayrock/pyre-os'
 license=(MIT)
