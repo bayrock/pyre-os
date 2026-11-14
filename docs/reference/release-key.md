@@ -5,8 +5,8 @@ This is how the PyreOS release key is kept, used, renewed and revoked. ADR 0009 
 ## What exists
 
 - **Primary key:** `PyreOS Release Key`, ed25519, certify-only. It expires on 2031-11-12, and its fingerprint is `65D123DD9A18A346A94C38E6228693F6D58F0A7F`. It lives only offline.
-- **Signing subkey:** ed25519, sign-only, made on 2026-11-13. It expires on 2028-11-12. CI holds a passphrase-less copy of it, alone, in the Actions secret `PYRE_SIGNING_SUBKEY`.
-- **Public key:** this is what `pyre-keyring` ships and what pacman trusts. It holds both the primary key and the subkey.
+- **Signing subkey:** ed25519, sign-only, made on 2026-11-13, fingerprint `279066B8C9E6FD17B3B9189C588DC5476F4A31E4`. It expires on 2028-11-12. CI holds a passphrase-less copy of it, alone, in the Actions secret `PYRE_SIGNING_SUBKEY`.
+- **Public key:** `packages/pyre-keyring/release.asc`, holding the primary key and the subkey. `tools/dev-key` folds it into the `pyre.gpg` that pacman imports, and `pyre-trusted` trusts its primary fingerprint.
 
 ## Where the private key lives
 
@@ -54,9 +54,10 @@ unset GNUPGHOME
 tools/release-key-ci /path/to/drive/pyre-release-key
 ```
 
-Then:
-1. Copy `build/keys/pyre-release.asc` into `pyre-keyring`.
-2. Bump `pkgrel` and publish it.
+Then update the keyring package (the same three steps after any key change):
+1. Copy `build/keys/pyre-release.asc` to `packages/pyre-keyring/release.asc`.
+2. Run `tools/dev-key`, which rebuilds `pyre.gpg` and `pyre-trusted` from the release and dev keys.
+3. Update `sha256sums` in its PKGBUILD, bump `pkgrel`, and publish it.
 
 Clients only learn the new expiry from the keyring package.
 

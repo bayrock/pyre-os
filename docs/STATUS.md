@@ -77,6 +77,7 @@ Last updated: 2026-11-13
   The first ISO, built before `[pyre]`, failed the identity checks, which confirms the test can fail.
 - **CI:** `.github/workflows/check.yml` runs two jobs in `archlinux:latest`. The `check` job runs `tools/check`, and the `packages` job runs `tools/build-pkgs` and namcap. Both were green on the push of 2026-11-08, as reported by the user from the Actions tab.
 - **Development key:** fingerprint `E150852868B407FB17F1149AE59B1D8F2343FD47`, UID "PyreOS Development Key (NOT FOR RELEASE)". The private key exists only in `build/keys/gnupg/` on the development machine.
+- **Release key** (2026-11-13, `docs/reference/release-key.md`): primary `65D123DD9A18A346A94C38E6228693F6D58F0A7F`, certify-only, kept offline. Signing subkey `279066B8C9E6FD17B3B9189C588DC5476F4A31E4`, expiring 2028-11-12, held in the Actions secret `PYRE_SIGNING_SUBKEY`. `pyre-keyring` 0.2.0 trusts it alongside the dev key.
 - **Known gaps:**
   - Local package builds use plain `makepkg --nodeps`, because `devtools` is not installed.
   - `[pyre]` packages are unsigned until P4.
@@ -124,5 +125,5 @@ Last updated: 2026-11-13
 
 Each question is listed under the phase that resolves it.
 
-- **Testing channel:** the release key exists (`docs/reference/release-key.md`). The next step is the user filling the CI secret with `tools/release-key-ci`.
+- **Testing channel:** the release key and CI secret exist. Next is the CI job that publishes signed packages to the `testing` release.
 - **P7:** whether the "PyreOS" trademark and domains are available.

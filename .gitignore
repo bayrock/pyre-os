@@ -18,8 +18,10 @@
 *.gpg
 *.asc
 *.key
-# Public development keyring (tools/dev-key); private keys stay in build/keys/.
+# Public keyring: release.asc is the release public key, and tools/dev-key assembles
+# pyre.gpg from it and the development key. Private keys stay offline or in build/keys/.
 !packages/pyre-keyring/pyre.gpg
+!packages/pyre-keyring/release.asc
 
 # Editor and OS noise
 .DS_Store

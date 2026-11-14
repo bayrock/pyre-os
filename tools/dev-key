@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Create (once) the PyreOS *development* signing key under build/keys/ and export
-# its public half into packages/pyre-keyring/. The private key never leaves build/.
-# Release images never trust this key (ADR 0009).
+# Create (once) the PyreOS *development* signing key under build/keys/, then assemble
+# packages/pyre-keyring/ from it and the release public key (release.asc, see
+# docs/reference/release-key.md). The private dev key never leaves build/.
+# Release images will drop the dev key in P7 (ADR 0009).
 set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 export GNUPGHOME="$repo_root/build/keys/gnupg"
 keyring_dir="$repo_root/packages/pyre-keyring"
+release_key="$keyring_dir/release.asc"
 uid='PyreOS Development Key (NOT FOR RELEASE) <dev@pyreos.invalid>'
 
 mkdir -p -- "$GNUPGHOME"
@@ -16,10 +18,19 @@ if ! gpg --batch --list-secret-keys -- "$uid" >/dev/null 2>&1; then
   gpg --batch --quiet --passphrase '' --quick-generate-key "$uid" ed25519 sign 2y
 fi
 
-fpr="$(gpg --batch --with-colons --list-secret-keys -- "$uid" | awk -F: '$1 == "fpr" { print $10; exit }')"
-[[ -n "$fpr" ]] || { echo "dev-key: could not read fingerprint" >&2; exit 1; }
+dev_fpr="$(gpg --batch --with-colons --list-secret-keys -- "$uid" | awk -F: '$1 == "fpr" { print $10; exit }')"
+[[ -n "$dev_fpr" ]] || { echo "dev-key: could not read fingerprint" >&2; exit 1; }
 
-gpg --batch --armor --export -- "$fpr" > "$keyring_dir/pyre.gpg"
-printf '%s:4:\n' "$fpr" > "$keyring_dir/pyre-trusted"
+# Import both public keys into a scratch keyring and export them as one armored block,
+# release key first. Only primary fingerprints go in pyre-trusted.
+release_fpr="$(gpg --batch --with-colons --show-keys -- "$release_key" | awk -F: '$1 == "fpr" { print $10; exit }')"
+[[ -n "$release_fpr" ]] || { echo "dev-key: could not read $release_key" >&2; exit 1; }
+scratch="$(mktemp -d)"
+trap 'GNUPGHOME="$scratch" gpgconf --kill gpg-agent 2>/dev/null || true; rm -rf -- "$scratch"' EXIT
+chmod 700 -- "$scratch"
+gpg --batch --armor --export -- "$dev_fpr" | GNUPGHOME="$scratch" gpg --batch --quiet --import
+GNUPGHOME="$scratch" gpg --batch --quiet --import -- "$release_key"
+GNUPGHOME="$scratch" gpg --batch --armor --export -- "$release_fpr" "$dev_fpr" > "$keyring_dir/pyre.gpg"
+printf '%s:4:\n' "$release_fpr" "$dev_fpr" > "$keyring_dir/pyre-trusted"
 : > "$keyring_dir/pyre-revoked"
-printf '%s\n' "$fpr"
+printf '%s\n' "$dev_fpr"

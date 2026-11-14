@@ -32,7 +32,7 @@ Run it before every commit. `tools/check-profile` runs as part of it and can als
 ## Build packages
 
 ```sh
-tools/dev-key      # once: development signing key in build/keys/, public half in packages/pyre-keyring/
+tools/dev-key      # once: development signing key in build/keys/; assembles packages/pyre-keyring/ from it and release.asc
 tools/build-pkgs   # every packages/*/PKGBUILD -> build/repo/ (the local [pyre] repo); run as your user
 ```
 

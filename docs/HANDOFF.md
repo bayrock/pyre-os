@@ -2,10 +2,7 @@
 
 ## Next task: the hosted testing channel, then P5
 
-1. **The release key** (ADR 0009, procedure in `docs/reference/release-key.md`). The private parts never pass through the agent:
-   - done on 2026-11-13: the primary key `65D123DD…0A7F` (certify-only) and an ed25519 signing subkey
-   - still to do: the user runs `tools/release-key-ci` to fill the Actions secret `PYRE_SIGNING_SUBKEY` and write `build/keys/pyre-release.asc`, then moves the keyring to two offline drives
-   - then the agent commits the public key, so `pyre-keyring` trusts the release key alongside the dev key; release images will drop the dev key in P7
+1. **The release key: done on 2026-11-13** (`docs/reference/release-key.md`). The primary key is offline, the subkey is in the Actions secret `PYRE_SIGNING_SUBKEY`, and `pyre-keyring` 0.2.0 trusts it alongside the dev key. Release images drop the dev key in P7.
 2. **CI publishing:** on pushes to `main`, build every package, sign it and the database with the subkey, and upload them to a GitHub Release named `testing`. Then `pyre-release`'s mirrorlist points at `https://github.com/bayrock/pyre-os/releases/download/testing`. Verify a VM can `pyre update` from it.
 3. **P5 (ROADMAP):** `palette.toml`, matugen templates, `pyre theme`, the "Ember" theme, and branding (Limine, Plymouth, the greeter, wallpapers, and the boot splash, which is still Arch artwork).
 4. **Landing page:** live at <https://bayrock.github.io/pyre-os/> (Pages source: GitHub Actions). When a testing release exists, add the "Install" pill (`landing/README.md`).

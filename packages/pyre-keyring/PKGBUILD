@@ -1,17 +1,18 @@
 # Maintainer: PyreOS contributors
-# The key in pyre.gpg is the DEVELOPMENT key from tools/dev-key, never a release key (ADR 0009).
+# pyre.gpg holds the release key (release.asc) and the development key; tools/dev-key
+# assembles it. Release images drop the development key in P7 (ADR 0009).
 pkgname=pyre-keyring
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
-pkgdesc='PyreOS PGP keyring (development key)'
+pkgdesc='PyreOS PGP keyring (release and development keys)'
 arch=(any)
 url='https://github.com/bayrock/pyre-os'
 license=(MIT)
 depends=(pacman)
 install=pyre-keyring.install
 source=(pyre.gpg pyre-trusted pyre-revoked)
-sha256sums=('a487720f3f562efadc28fe341fe483571a2f6ee81f09aa4ea8177c7d69f68c01'
-            '8d85921095de7c3056bb33e7738c989f57f33d49f3ba21ca05af8dd9aff9feb1'
+sha256sums=('31bd008804c9d30ab1f960f421c415e40b0e8b2b4b6382dc4bef40023cb440f3'
+            '28b49fc98d9bb2e2f4d5734df0987b9857d57795e89a69f12c68b9b55e80878a'
             'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
 
 package() {
