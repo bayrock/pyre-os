@@ -45,7 +45,11 @@ ADR 0005 already requires that "the theme system must drive Noctalia's palette, 
   - **Limine:** `pyre-base` keeps a marked block at the top of `limine.conf` (Limine reads global options anywhere in the file, and `limine-entry-tool` keeps foreign lines). The block sets the PyreOS branding, Ember's colors, and a 1920×1080 copy of the wallpaper on the ESP, `/pyre/wallpaper.jpg`.
   - The block is applied by a pacman hook on every `pyre-base` change, and by `pyre-install` right after `limine-update`.
   - A line `# pyre-boot-branding: off` opts out. An enrolled config (Secure Boot) is re-enrolled only when the admin turned enrollment on.
-  - Plymouth and the ISO's menus follow the same rule.
+  - **Plymouth:** `pyre-base` ships an original `script` theme, `pyre`. It shows the flame mark on Ember's night sky, three embers that glow in turn while booting, and the disk unlock prompt with a rounded field and one bullet per key. `tools/render-plymouth` draws its images.
+  - `pyre-install` adds the `plymouth` initramfs hook (after `kms`, before `sd-encrypt`), selects the theme, and puts `quiet splash` at the front of the kernel command line.
+  - Existing systems keep their hook list, which belongs to the admin. They opt in with the hook and `plymouth-set-default-theme -R pyre`.
+  - Plymouth falls back to text mode whenever a serial console is configured, which is why the VM tests stay in text mode unless they pass `plymouth.ignore-serial-consoles`.
+  - The ISO's menus follow the same rule.
 
 ## Consequences
 

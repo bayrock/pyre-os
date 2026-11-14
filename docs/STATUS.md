@@ -90,6 +90,11 @@ Last updated: 2026-11-13
   - **Live recolor** (`pyre-cli` and `pyre-desktop` 0.2.1): Noctalia's `pyre-live` template runs `pyre theme refresh` on every palette change. Open foot terminals get OSC color sequences, and open GTK windows get a color-scheme nudge.
   - `tools/test-theme` checks with screen pixels that an open foot and an open nautilus recolor on a live switch and back. The user unit `003-theme-state` migrates 0.2.0's theme record file.
   - **Limine boot menu** (`pyre-base` 0.4.0): "PyreOS" in gold, Ember's colors, and the wallpaper. `pyre-boot-branding` keeps a marked block at the top of `limine.conf`, applied by a pacman hook and by `pyre-install`. `tools/test-theme` checks that the block survives `limine-update` and that the menu shows the wallpaper. Limine 12 takes `RRGGBB` values for `interface_*_colour`, not v11's palette indexes.
+  - **Boot splash** (`pyre-base` 0.5.0, `pyre-installer` 0.3.2): an original Plymouth script theme. It shows the mark on Ember's sky, a three-ember loader, and the unlock prompt.
+    - `pyre-install` adds the `plymouth` hook and `quiet splash`. Existing installs opt in by hand.
+    - `tools/test-splash` checks it on an overlay of the e2e disk: the mark, four bullets for four keys, and an unlock through the splash.
+    - The test runs without GL (`--display none`), because QEMU has no capturable surface at the boot console with GL, and with `plymouth.ignore-serial-consoles`, because Plymouth falls back to text mode when a serial console is configured.
+    - The shared VM unlock step also accepts the passphrase request itself, which `quiet` keeps on the serial console.
 - **e2e on the rebuilt ISO (2026-11-13):** `tools/test-e2e` passed every stage, including the new `pacman-unlocked` check after rollback.
 - **Fixed on the way:** a restored snap-pac "pre" snapshot carries `/var/lib/pacman/db.lck`, so pacman stayed locked after `pyre rollback`. `pyre-base` 0.3.1 clears it at boot with a tmpfiles rule.
 - **Release key** (2026-11-13, `docs/reference/release-key.md`): primary `65D123DD9A18A346A94C38E6228693F6D58F0A7F`, certify-only, kept offline. Signing subkey `279066B8C9E6FD17B3B9189C588DC5476F4A31E4`, expiring 2028-11-12, held in the Actions secret `PYRE_SIGNING_SUBKEY`. `pyre-keyring` 0.2.0 trusts it alongside the dev key.

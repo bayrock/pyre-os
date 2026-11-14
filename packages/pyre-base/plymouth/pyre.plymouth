@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=PyreOS
+Description=The PyreOS boot splash: the flame mark on Ember's night sky (ADR 0015)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/pyre
+ScriptFile=/usr/share/plymouth/themes/pyre/pyre.script

@@ -2,7 +2,7 @@
 # Meta-package for every PyreOS system (ADR 0008, ADR 0012). Kernels and the
 # Limine boot stack are installed by pyre-install, not forced here.
 pkgname=pyre-base
-pkgver=0.4.0
+pkgver=0.5.0
 pkgrel=1
 pkgdesc='PyreOS base system (meta-package)'
 arch=(any)
@@ -16,6 +16,7 @@ depends=(
   pyre-cli
   pyre-keyring
   pyre-release
+  plymouth
   snapper
   sudo
   zram-generator
@@ -40,4 +41,11 @@ package() {
   install -Dm644 limine-wallpaper.jpg "$pkgdir/usr/share/pyre/boot/limine-wallpaper.jpg"
   install -Dm755 pyre-boot-branding "$pkgdir/usr/lib/pyre/boot-branding"
   install -Dm644 pyre-boot-branding.hook "$pkgdir/usr/share/libalpm/hooks/pyre-boot-branding.hook"
+  # The PyreOS boot splash (ADR 0015), built in place from plymouth/
+  # (tools/render-plymouth draws its images). pyre-install selects it and adds the
+  # plymouth initramfs hook; on other systems: plymouth-set-default-theme -R pyre.
+  local file
+  for file in pyre.plymouth pyre.script mark.png ember-gold.png ember-orange.png ember-coral.png entry.png bullet.png; do
+    install -Dm644 "$startdir/plymouth/$file" "$pkgdir/usr/share/plymouth/themes/pyre/$file"
+  done
 }

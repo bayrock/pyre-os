@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2016 # probes are typed into the guest verbatim
+# The PyreOS boot splash (ADR 0015), headless under UEFI: boots a throwaway
+# overlay of an installed test disk (default build/vm/test-e2e), installs the
+# newest local pyre-base, and applies pyre-install's boot step (the plymouth
+# hook, the theme, quiet splash). Then it boots to the graphical unlock
+# prompt, checks the mark and the typed bullets by screen pixels, and unlocks
+# through the splash. The base disk is never written.
+# The VM runs without GL (--display none): QEMU has no screen surface to
+# capture at the boot console with GL. plymouth.ignore-serial-consoles keeps
+# the graphical splash despite the test's serial console; real machines have
+# none, so they need no such parameter.
+# Usage: tools/test-splash [--base NAME]
+# Evidence: build/vm/test-splash/share/splash-*.png
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+tool=test-splash
+name=test-splash
+base_name=test-e2e
+case "${1:-}" in
+  --base) base_name="${2:?--base needs a VM name}" ;;
+  -h|--help) sed -n '3,14s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
+  "") ;;
+  *) echo "$tool: unknown argument: $1" >&2; exit 2 ;;
+esac
+# shellcheck source=tools/lib/vmtest.sh
+source "$repo_root/tools/lib/vmtest.sh"
+
+base="$repo_root/build/vm/$base_name"
+[[ -f "$base/disk.qcow2" && -f "$base/OVMF_VARS.4m.fd" ]] ||
+  { echo "$tool: no installed disk in $base; run tools/test-e2e first" >&2; exit 1; }
+if [[ -f "$base/qemu.pid" ]] && kill -0 "$(<"$base/qemu.pid")" 2>/dev/null; then
+  echo "$tool: $base_name is running; stop it first" >&2; exit 1
+fi
+shopt -s nullglob
+files=("$repo_root"/build/repo/pyre-base-[0-9]*.pkg.tar.zst)
+(( ${#files[@]} )) || { echo "$tool: no pyre-base in build/repo; run tools/build-pkgs" >&2; exit 1; }
+hooks="$(sed -n "s/^readonly INITRAMFS_HOOKS='\(.*\)'$/\1/p" "$repo_root/src/installer/lib/boot.sh")"
+[[ "$hooks" == *" plymouth "* ]] || { echo "$tool: pyre-install's hooks have no plymouth" >&2; exit 1; }
+
+rm -rf -- "$vm_dir"
+mkdir -p -- "$vm_dir/share/pkgs"
+cp -- "${files[-1]}" "$vm_dir/share/pkgs/"
+[[ -f "${files[-1]}.sig" ]] && cp -- "${files[-1]}.sig" "$vm_dir/share/pkgs/"
+qemu-img create -q -f qcow2 -b "$base/disk.qcow2" -F qcow2 "$vm_dir/disk.qcow2"
+cp -- "$base/OVMF_VARS.4m.fd" "$vm_dir/"
+
+# The splash on the single 1280x800 output: the mark centred at 40% height,
+# and the unlock field below it (pyre.script's layout).
+field_x=480 field_y=472
+cream=FDFCEB field=251C16
+
+capture() { # NAME: a screendump into the share, retried while the display settles
+  local i
+  for i in $(seq 15); do
+    "$repo_root/tools/vm-ctl" --name "$name" screendump "$share/$1.png" >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  die "no screen to capture for $1"
+}
+pixel() { # SHOT X Y: the pixel as RRGGBB
+  local hex
+  hex="$(magick "$share/$1.png" -format "%[hex:p{$2,$3}]" info:)"
+  printf '%s\n' "${hex:0:6}"
+}
+wait_prompt() { # the splash's unlock field is on screen
+  local i
+  for i in $(seq 90); do
+    if "$repo_root/tools/vm-ctl" --name "$name" screendump "$share/probe.png" >/dev/null 2>&1 &&
+      [[ "$(pixel probe 640 $((field_y + 22)))" == "$field" ]]; then
+      rm -f -- "$share/probe.png"
+      pass "splash prompt on screen after ${i}s"
+      return 0
+    fi
+    sleep 1
+  done
+  die "the splash's unlock prompt never appeared"
+}
+
+# --- 1. pyre-install's boot step on the installed system -----------------------
+start_vm setup --net --boot-disk
+unlock_and_login
+expect share 'mkdir -p /mnt/share && mount -t 9p -o trans=virtio pyre-share /mnt/share && echo mounted' '^mounted$'
+expect install 'printf "Server = https://github.com/bayrock/pyre-os/releases/download/testing\n" > /etc/pacman.d/pyre-mirrorlist; pacman -Sy >/dev/null 2>&1; pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-splash-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-splash-install.log' '^rc=0$'
+expect boot-step 'sed -i "s/^HOOKS=.*/HOOKS=('"$hooks"')/" /etc/mkinitcpio.conf && plymouth-set-default-theme pyre && sed -i "s/^KERNEL_CMDLINE\[default\]+=\"/&quiet splash plymouth.ignore-serial-consoles /" /etc/default/limine && limine-update >/var/log/test-splash-update.log 2>&1; echo rc=$?' '^rc=0$'
+expect theme 'plymouth-set-default-theme' '^pyre$'
+expect cmdline 'grep -c "quiet splash" /boot/limine.conf' '^[1-9]'
+power_off
+
+# --- 2. the graphical splash: mark, prompt, bullets, unlock ---------------------
+start_vm splash --boot-disk --display none
+wait_prompt
+capture splash-prompt
+[[ "$(pixel splash-prompt 640 330)" != "$field" && "$(pixel splash-prompt 640 330)" != 130E0A ]] ||
+  die "no mark above the prompt"
+pass "splash-prompt: the mark and the field"
+type_keys "pyre"
+sleep 1
+capture splash-bullets
+for i in 0 1 2 3; do
+  [[ "$(pixel splash-bullets $((field_x + 28 + i * 14)) $((field_y + 22)))" == "$cream" ]] ||
+    die "bullet $((i + 1)) is not shown"
+done
+[[ "$(pixel splash-bullets $((field_x + 28 + 4 * 14)) $((field_y + 22)))" == "$field" ]] ||
+  die "a fifth bullet is shown for four keys"
+pass "splash-bullets: four keys, four bullets"
+"$repo_root/tools/vm-ctl" --name "$name" type -- "${passphrase#pyre}"$'\n'
+sleep 1.5
+capture splash-booting
+wait_for "$hostname login:" 180 || die "no login prompt after unlocking through the splash"
+pass "unlocked through the splash"
+stop_vm
+printf '%s: PASS (screenshots in %s)\n' "$tool" "$share"

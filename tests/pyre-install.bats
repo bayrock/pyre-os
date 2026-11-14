@@ -129,9 +129,9 @@ EOF
 
 @test "kernel_cmdline unlocks the root volume with sd-encrypt and appends extras" {
   config_defaults
-  [ "$(kernel_cmdline 1234)" = "rd.luks.name=1234=root root=/dev/mapper/root rootflags=subvol=@ rw rootfstype=btrfs zswap.enabled=0" ]
+  [ "$(kernel_cmdline 1234)" = "rd.luks.name=1234=root root=/dev/mapper/root rootflags=subvol=@ rw rootfstype=btrfs zswap.enabled=0 quiet splash" ]
   CFG[kernel_params]="console=ttyS0,115200"
-  [[ "$(kernel_cmdline 1234)" == *" zswap.enabled=0 console=ttyS0,115200" ]]
+  [[ "$(kernel_cmdline 1234)" == *" quiet splash console=ttyS0,115200" ]]
 }
 
 @test "the ISO's offline package list covers everything the installer installs" {

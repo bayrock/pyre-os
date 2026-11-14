@@ -126,11 +126,14 @@ expect() {
 # probes never show up in the output.
 unlock_and_login() {
   local try
-  wait_for 'Cryptography Setup for root' 180 || die "no LUKS unlock request on the serial console"
+  # With the boot splash (quiet splash), the kernel log may be off the serial
+  # console, but the passphrase request is always echoed there.
+  wait_for 'Cryptography Setup for root|Please enter passphrase for disk root' 180 ||
+    die "no LUKS unlock request on the serial console"
   for try in 1 2 3; do
     sleep 3
     type_keys "$passphrase"$'\n'
-    wait_for 'Finished .*Cryptography Setup for root|Reached target .*Local Encrypted Volumes' 30 && break
+    wait_for "Finished .*Cryptography Setup for root|Reached target .*Local Encrypted Volumes|$hostname login:" 30 && break
     (( try < 3 )) || die "LUKS did not unlock"
   done
   pass "LUKS unlocked"

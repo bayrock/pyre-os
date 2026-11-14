@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Render the PyreOS boot splash images (ADR 0015) for pyre-base's Plymouth theme.
+
+All original: the flame mark from landing/site/pyre-e.svg, and simple shapes
+in Ember's colors (themes/ember/palette.json). Writes PNGs to
+packages/pyre-base/plymouth/ next to the hand-written pyre.script.
+
+Usage: tools/render-plymouth
+"""
+import json
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+OUT = ROOT / "packages" / "pyre-base" / "plymouth"
+MARK = ROOT / "landing" / "site" / "pyre-e.svg"
+
+
+def palette():
+    dark = json.loads((ROOT / "themes" / "ember" / "palette.json").read_text())["dark"]
+    return {"gold": dark["secondary"], "orange": dark["primary"], "coral": dark["tertiary"],
+            "field": dark["surface_container"], "outline": dark["outline_variant"],
+            "text": dark["on_surface"]}
+
+
+def ember(color):
+    # A bright core in a soft halo, like the landing page's chimney embers.
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28">
+  <defs><radialGradient id="g"><stop offset="0" stop-color="{color}" stop-opacity="0.55"/>
+  <stop offset="1" stop-color="{color}" stop-opacity="0"/></radialGradient></defs>
+  <circle cx="14" cy="14" r="14" fill="url(#g)"/><circle cx="14" cy="14" r="5" fill="{color}"/>
+</svg>'''
+
+
+def entry(c):
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="320" height="44">
+  <rect x="1" y="1" width="318" height="42" rx="21" fill="{c["field"]}" stroke="{c["outline"]}" stroke-width="2"/>
+</svg>'''
+
+
+def bullet(c):
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12">
+  <circle cx="6" cy="6" r="5" fill="{c["text"]}"/></svg>'''
+
+
+def render(svg_text, out, height=None):
+    with tempfile.NamedTemporaryFile("w", suffix=".svg", delete=False) as f:
+        f.write(svg_text)
+    args = ["rsvg-convert", "-o", str(out)]
+    if height:
+        args += ["-h", str(height)]
+    subprocess.run(args + [f.name], check=True)
+    pathlib.Path(f.name).unlink()
+
+
+def main():
+    OUT.mkdir(parents=True, exist_ok=True)
+    c = palette()
+    render(MARK.read_text(), OUT / "mark.png", height=112)
+    for name in ("gold", "orange", "coral"):
+        render(ember(c[name]), OUT / f"ember-{name}.png")
+    render(entry(c), OUT / "entry.png")
+    render(bullet(c), OUT / "bullet.png")
+    # Strip metadata so the files are reproducible.
+    for png in OUT.glob("*.png"):
+        subprocess.run(["magick", str(png), "-strip", f"PNG32:{png}"], check=True)
+    print("wrote", ", ".join(sorted(p.name for p in OUT.glob("*.png"))))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

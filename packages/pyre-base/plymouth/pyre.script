@@ -1,0 +1,110 @@
+# The PyreOS boot splash (ADR 0015): the flame mark on Ember's night sky,
+# three embers that glow in turn below it, and the disk unlock prompt.
+# Original artwork: tools/render-plymouth draws the images.
+
+# Ember's sky, #130e0a at the top to #1c1611 at the bottom.
+Window.SetBackgroundTopColor(0.075, 0.055, 0.039);
+Window.SetBackgroundBottomColor(0.110, 0.086, 0.067);
+
+global.w = Window.GetWidth();
+global.h = Window.GetHeight();
+global.x0 = Window.GetX();
+global.y0 = Window.GetY();
+
+mark.image = Image("mark.png");
+mark.sprite = Sprite(mark.image);
+mark.x = x0 + w / 2 - mark.image.GetWidth() / 2;
+mark.y = y0 + h * 0.40 - mark.image.GetHeight() / 2;
+mark.sprite.SetPosition(mark.x, mark.y, 10);
+global.below = mark.y + mark.image.GetHeight();
+
+# The embers: gold, orange and coral, each brightening in turn.
+colors[0] = "gold";
+colors[1] = "orange";
+colors[2] = "coral";
+for (i = 0; i < 3; i++) {
+  embers[i].image = Image("ember-" + colors[i] + ".png");
+  embers[i].sprite = Sprite(embers[i].image);
+  embers[i].sprite.SetPosition(x0 + w / 2 - 14 + (i - 1) * 30, below + 44, 10);
+  embers[i].sprite.SetOpacity(0.3);
+}
+
+global.tick = 0;
+global.asking = 0;
+fun refresh() {
+  global.tick++;
+  if (asking) {
+    return;
+  }
+  for (i = 0; i < 3; i++) {
+    phase = tick / 18 - i * 1.4;
+    embers[i].sprite.SetOpacity(0.3 + 0.7 * (0.5 + 0.5 * Math.Sin(phase)));
+  }
+}
+Plymouth.SetRefreshFunction(refresh);
+
+# The unlock prompt: the prompt text, a rounded field, one bullet per key.
+entry.image = Image("entry.png");
+entry.sprite = Sprite(entry.image);
+entry.x = x0 + w / 2 - entry.image.GetWidth() / 2;
+entry.y = below + 96;
+entry.sprite.SetPosition(entry.x, entry.y, 20);
+entry.sprite.SetOpacity(0);
+# Sprites are made here, at the top level: one made inside a function is
+# local to it and vanishes when the function returns.
+bullet.image = Image("bullet.png");
+for (i = 0; i < 20; i++) {
+  bullets[i].sprite = Sprite(bullet.image);
+  bullets[i].sprite.SetPosition(entry.x + 22 + i * 14, entry.y + 16, 30);
+  bullets[i].sprite.SetOpacity(0);
+}
+prompt.sprite = Sprite();
+prompt.sprite.SetOpacity(0);
+
+fun show_embers(o) {
+  for (i = 0; i < 3; i++) {
+    embers[i].sprite.SetOpacity(o);
+  }
+}
+
+fun display_password(text, count) {
+  global.asking = 1;
+  show_embers(0);
+  prompt.image = Image.Text(text, 0.992, 0.988, 0.922, 1, "Sans 12");
+  prompt.sprite.SetImage(prompt.image);
+  prompt.sprite.SetPosition(x0 + w / 2 - prompt.image.GetWidth() / 2, entry.y - prompt.image.GetHeight() - 14, 20);
+  prompt.sprite.SetOpacity(1);
+  entry.sprite.SetOpacity(1);
+  shown = count;
+  if (shown > 20) {
+    shown = 20;
+  }
+  for (i = 0; i < 20; i++) {
+    if (i < shown) {
+      bullets[i].sprite.SetOpacity(1);
+    } else {
+      bullets[i].sprite.SetOpacity(0);
+    }
+  }
+}
+Plymouth.SetDisplayPasswordFunction(display_password);
+
+fun display_normal() {
+  global.asking = 0;
+  prompt.sprite.SetOpacity(0);
+  entry.sprite.SetOpacity(0);
+  for (i = 0; i < 20; i++) {
+    bullets[i].sprite.SetOpacity(0);
+  }
+  show_embers(0.3);
+}
+Plymouth.SetDisplayNormalFunction(display_normal);
+
+# Status messages (for example a file system check) near the bottom.
+message.sprite = Sprite();
+fun display_message(text) {
+  message.image = Image.Text(text, 0.753, 0.682, 0.604, 1, "Sans 11");
+  message.sprite.SetImage(message.image);
+  message.sprite.SetPosition(x0 + w / 2 - message.image.GetWidth() / 2, y0 + h * 0.88, 20);
+}
+Plymouth.SetMessageFunction(display_message);

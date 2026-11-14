@@ -3,7 +3,8 @@
 # archinstall leaves the target mounted at TARGET with the LUKS volume open.
 
 TARGET="${TARGET:-/mnt}"
-readonly INITRAMFS_HOOKS='base systemd autodetect microcode modconf kms keyboard sd-vconsole block sd-encrypt filesystems sd-btrfs-overlayfs fsck'
+# plymouth after systemd and kms, before sd-encrypt: the splash asks for the passphrase.
+readonly INITRAMFS_HOOKS='base systemd autodetect microcode modconf kms plymouth keyboard sd-vconsole block sd-encrypt filesystems sd-btrfs-overlayfs fsck'
 readonly BOOT_STACK=(limine limine-mkinitcpio-hook limine-snapper-sync efibootmgr)
 
 in_target() {
@@ -17,17 +18,21 @@ luks_partition() {
 
 # kernel_cmdline LUKS_UUID: the command line for every Limine entry.
 kernel_cmdline() {
-  local cmdline="rd.luks.name=$1=root root=/dev/mapper/root rootflags=subvol=@ rw rootfstype=btrfs zswap.enabled=0"
+  local cmdline="rd.luks.name=$1=root root=/dev/mapper/root rootflags=subvol=@ rw rootfstype=btrfs zswap.enabled=0 quiet splash"
   [[ -z "${CFG[kernel_params]}" ]] || cmdline+=" ${CFG[kernel_params]}"
   printf '%s\n' "$cmdline"
 }
 
-# 1. systemd initramfs with sd-encrypt and the read-only snapshot overlay.
+# 1. systemd initramfs with sd-encrypt, the read-only snapshot overlay, and
+# the PyreOS boot splash (pyre-base's Plymouth theme, ADR 0015). The theme is
+# chosen before the boot stack builds the first initramfs.
 write_initramfs_hooks() {
   local conf="$TARGET/etc/mkinitcpio.conf"
   [[ "$(grep -c '^HOOKS=' "$conf")" == 1 ]] || die "expected exactly one HOOKS= line in $conf"
   sed -i "s/^HOOKS=.*/HOOKS=($INITRAMFS_HOOKS)/" "$conf"
   info "initramfs hooks: $INITRAMFS_HOOKS"
+  in_target plymouth-set-default-theme pyre
+  info "boot splash: PyreOS"
 }
 
 # 2. limine-entry-tool settings. The installer writes this file once; it
