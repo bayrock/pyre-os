@@ -4,14 +4,15 @@ This machine is the P6 daily-driver target, recorded at model level only. It inf
 
 ## Hardware
 
-- CPU: AMD Ryzen 5 5600X. RAM: 16 GiB.
-- GPU: NVIDIA GeForce RTX 3060 Ti. It uses `nvidia-open-dkms`, since GSP is supported. The current desktop sets `LIBVA_DRIVER_NAME=nvidia`, `__GLX_VENDOR_LIBRARY_NAME=nvidia`, and `NVD_BACKEND=direct`, with early-loaded modules and `nvidia_drm modeset=1`.
+- CPU: AMD Ryzen 5 5600X. RAM: 16 GiB. Board: ASRock X570 Taichi.
+- Firmware (read 2026-11-14): the current system boots in **legacy BIOS mode** from an MBR disk, while Windows is a UEFI install on a GPT disk. PyreOS needs a UEFI boot (ADR 0011); `migration.md` covers it.
+- GPU: NVIDIA GeForce RTX 3060 Ti (PCI `10de:24c9`). It uses `nvidia-open-dkms`, since GSP is supported; `pyre hw detect`, run read-only against this machine's sysfs on 2026-11-14, matches the `10-nvidia-open` rule. With `nvidia-open` 595 and later the kernel's suspend notifiers preserve video memory, and `nvidia-utils` (615 here) no longer enables its sleep services. The current desktop sets `LIBVA_DRIVER_NAME=nvidia`, `__GLX_VENDOR_LIBRARY_NAME=nvidia`, and `NVD_BACKEND=direct`, with early-loaded modules and `nvidia_drm modeset=1`.
 - Network: Intel Wi-Fi 6 AX200 (`iwlwifi`) and Intel I211 Ethernet (`igb`).
-- Audio: AMD HD Audio, NVIDIA HDMI audio, and KEF LSX II USB speakers.
+- Audio: AMD HD Audio, NVIDIA HDMI audio, a Behringer UMC404HD USB interface, KEF LSX II USB speakers, and a Logitech C920 webcam's microphone.
 - Input: Wooting 60HE v2 and Rama Works M6-B keyboards (configured through the web apps VIA and Wootility), and a WLMouse Beast Max 8K mouse.
 - Storage:
-  - 120 GB SATA SSD running the current desktop: a 2 GiB ESP and LUKS2 with btrfs (`@`, `@home`, `@log`, `@pkg`, zstd:3), zram plus a hibernation swapfile.
-  - 1 TB NVMe holding Windows with its own ESP, so the machine dual-boots.
+  - 120 GB SATA SSD running the current desktop: an MBR table with a 2 GiB FAT boot partition, and LUKS2 with btrfs (`@`, `@home`, `@log`, `@pkg`, zstd:3), zram plus a 16 GiB hibernation swapfile at `/swap/swapfile`. It is 85% full; the home directory holds 63 GiB without caches.
+  - 1 TB NVMe holding Windows (GPT, its own ESP, 358 GiB free on the data partition), so the machine dual-boots.
 
 ## Displays
 
@@ -19,9 +20,9 @@ These are the current Hyprland names; niri's output names may differ.
 
 | Output | Panel | Mode | Placement |
 |---|---|---|---|
-| DP-1 | LG 27GK750F | 1080p@60 | Rotated 270° (portrait), left |
-| DP-3 | LG UltraGear | 1920x1080@240 | Main |
-| HDMI-A-1 | TV | 1080p@60 | Above main; often disconnected |
+| DP-1 | LG 27GK750F | 1080p@60 | Rotated 270° (portrait), left; position 0,240 |
+| DP-3 | LG UltraGear | 1920x1080@240 | Main; position 1080,1080 |
+| HDMI-A-1 | TV | 1080p@60 | Above main, position 1080,0; often disconnected |
 
 All outputs run at scale 1. The current desktop's template sets `GDK_SCALE=2`, which is wrong here because XWayland apps render at double size. Do not carry it over.
 
@@ -47,4 +48,6 @@ All outputs run at scale 1. The current desktop's template sets `GDK_SCALE=2`, w
 ## Unknowns
 
 - `/boot` contents and the ufw rules: reading them needs root.
-- Whether dual-boot currently goes through Limine or the firmware boot menu.
+- niri's names for the three outputs, and whether VRR holds at 240 Hz under niri with the NVIDIA driver: the first boot on the machine shows both (`tools/hw-report`).
+
+Dual-boot today goes through the firmware's boot menu: a BIOS-mode Limine cannot start a UEFI Windows. Under PyreOS, Limine chainloads it (ADR 0017).

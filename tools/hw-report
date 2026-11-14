@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Collect what P6 needs to judge a PyreOS install on real hardware, as plain
+# text: firmware and boot, the hardware rules, the GPU driver, outputs and
+# their modes, sleep states, audio, Bluetooth, network, input devices, and
+# what failed. Read-only: it changes nothing and never asks for a password.
+# Run it inside the desktop session on the installed machine.
+# Usage: tools/hw-report [FILE]   (default: build/hw-report.txt, and the terminal)
+# The report names models, not serial numbers, but read it before sharing it:
+# journal lines can carry more.
+set -uo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+out="${1:-$repo_root/build/hw-report.txt}"
+case "$out" in -h | --help) sed -n '2,9s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;; esac
+mkdir -p -- "$(dirname -- "$out")"
+
+section() {
+  printf '\n== %s\n' "$*"
+}
+
+# run CMD...: the command's output, or one line saying why there is none.
+run() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    printf '(%s is not installed)\n' "$1"
+    return 0
+  fi
+  "$@" 2>&1 || printf '(%s exited %d)\n' "$1" "$?"
+}
+
+read_file() {
+  local file
+  for file in "$@"; do
+    [[ -r "$file" ]] && printf '%s: %s\n' "$file" "$(tr '\n' ' ' <"$file")"
+  done
+  return 0
+}
+
+report() {
+  section "System"
+  sed -n 's/^PRETTY_NAME=//p' /etc/os-release
+  uname -r
+  if [[ -d /sys/firmware/efi ]]; then echo "firmware: UEFI"; else echo "firmware: BIOS"; fi
+  read_file /sys/class/dmi/id/board_vendor /sys/class/dmi/id/board_name /sys/class/dmi/id/bios_version
+  sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo | head -n 1
+  grep MemTotal /proc/meminfo
+  cat /proc/cmdline | sed -E 's/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}/<uuid>/g'
+
+  section "Hardware rules (pyre hw detect)"
+  run pyre hw detect
+
+  section "pyre doctor"
+  run pyre doctor
+
+  section "GPUs and drivers"
+  local card
+  for card in /sys/class/drm/card[0-9]; do
+    [[ -e "$card/device/vendor" ]] || continue
+    printf '%s: vendor %s device %s driver %s\n' "${card##*/}" "$(<"$card/device/vendor")" \
+      "$(<"$card/device/device")" "$(basename -- "$(readlink -f "$card/device/driver" 2>/dev/null)")"
+  done
+  read_file /proc/driver/nvidia/version /sys/module/nvidia_drm/parameters/modeset
+  command -v nvidia-smi >/dev/null 2>&1 &&
+    run nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total --format=csv,noheader
+
+  section "Session"
+  printf 'XDG_CURRENT_DESKTOP=%s WAYLAND_DISPLAY=%s\n' "${XDG_CURRENT_DESKTOP:-}" "${WAYLAND_DISPLAY:-}"
+  run niri --version
+  run noctalia --version
+  run pyre theme current
+
+  section "Outputs (niri msg outputs)"
+  run niri msg outputs
+
+  section "Sleep"
+  read_file /sys/power/state /sys/power/mem_sleep /sys/power/disk /sys/power/resume /sys/power/resume_offset
+  run swapon --show=NAME,TYPE,SIZE,USED,PRIO
+  journalctl -b -k -o short-monotonic --no-hostname --no-pager 2>/dev/null | grep -E 'PM: (suspend|hibernation: hibernation) (entry|exit)' | tail -n 10
+
+  section "Audio (wpctl status)"
+  run wpctl status | sed -n '/^Audio/,/^Video/p'
+
+  section "Bluetooth"
+  run bluetoothctl show | grep -E 'Name|Powered|Discoverable|Pairable' | sed 's/Name: .*/Name: <set>/'
+  run rfkill list
+
+  section "Network"
+  run nmcli -t -f DEVICE,TYPE,STATE device
+
+  section "Input devices"
+  sed -n 's/^N: Name=//p' /proc/bus/input/devices | sort -u
+
+  section "Firmware boot entries"
+  run efibootmgr | sed -E 's/\t.*//'
+
+  section "Failed units"
+  run systemctl --failed --no-legend --plain
+  run systemctl --user --failed --no-legend --plain
+
+  section "Errors this boot (most frequent first)"
+  journalctl -b -p err -o cat --no-pager 2>/dev/null | sort | uniq -c | sort -rn | head -n 40
+}
+
+report | tee -- "$out"
+printf '\nSaved to %s\n' "$out"
