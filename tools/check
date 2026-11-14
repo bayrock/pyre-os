@@ -52,6 +52,9 @@ done
 step "iso profile"
 tools/check-profile || fail check-profile
 
+step "themes"
+tools/check-themes || fail check-themes
+
 if [[ -d tests ]] && find tests -name '*.bats' -print -quit | grep -q .; then
   step "bats"
   bats -r tests || fail bats

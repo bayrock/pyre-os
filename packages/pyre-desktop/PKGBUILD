@@ -4,7 +4,7 @@
 # stubs are in defaults/ and skel/ of this repository, so the package is built
 # in place.
 pkgname=pyre-desktop
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='PyreOS desktop: niri, Noctalia, session services, default apps and defaults'
 arch=(any)
@@ -12,6 +12,7 @@ url='https://github.com/bayrock/pyre-os'
 license=(MIT)
 depends=(
   pyre-base
+  pyre-themes
   # Session: compositor, shell, greeter, X11 apps, portals
   niri
   noctalia
@@ -48,7 +49,8 @@ depends=(
   ripgrep
   starship
   zoxide
-  # Desktop plumbing and fonts
+  # Desktop plumbing, themes and fonts
+  adw-gtk-theme
   libnotify
   wl-clipboard
   xdg-user-dirs
@@ -61,6 +63,9 @@ backup=(
   etc/skel/.config/foot/foot.ini
   etc/skel/.config/niri/config.kdl
   etc/skel/.config/noctalia/config.toml
+  etc/skel/.config/btop/btop.conf
+  etc/skel/.config/gtk-3.0/gtk.css
+  etc/skel/.config/gtk-4.0/gtk.css
 )
 
 package() {

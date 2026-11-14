@@ -18,6 +18,7 @@ It starts as the primary author's daily driver and is built to the standard of a
 | Updates | Plain pacman is always safe; reconcile instead of migrations | [0007](decisions/0007-update-and-reconcile-model.md) |
 | Storage/boot | LUKS2 + btrfs, Limine, snapper (root and home), systemd initramfs | [0008](decisions/0008-storage-and-boot.md) |
 | Packages | Signed `[pyre]` repo after Arch's repos, CI-built | [0009](decisions/0009-package-repository.md) |
+| Themes | A theme is a Noctalia palette; Noctalia's templates color the apps | [0015](decisions/0015-theme-system.md) |
 
 ## Priorities
 

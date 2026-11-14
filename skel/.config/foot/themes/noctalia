@@ -1,0 +1,24 @@
+# First-login copy of Noctalia's foot theme in the Ember palette. Noctalia
+# rewrites this file whenever the palette changes (ADR 0015).
+[colors-dark]
+foreground=f1eadc
+background=1c1611
+regular0=362b24
+regular1=e96d51
+regular2=8eb267
+regular3=e9b851
+regular4=66abe5
+regular5=d887ae
+regular6=36baba
+regular7=d1c9bc
+bright0=948274
+bright1=f7a597
+bright2=a8cb86
+bright3=f5cb70
+bright4=86c5fa
+bright5=efa3c7
+bright6=65d2d2
+bright7=f1eadc
+selection-foreground=fdfceb
+selection-background=643d20
+cursor=130e0a d9803c

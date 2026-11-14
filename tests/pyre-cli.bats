@@ -7,7 +7,9 @@ setup() {
   mkdir -p "$lib"
   cp -r "$cli/lib" "$cli/commands" "$lib/"
   mkdir -p "$lib/reconcile/user"
+  # Every XDG base directory points into the test tree, never the real home.
   export PYRE_LIB="$lib" HOME="$BATS_TEST_TMPDIR/home" XDG_STATE_HOME="$BATS_TEST_TMPDIR/state"
+  export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_HOME="$HOME/.local/share" XDG_CACHE_HOME="$HOME/.cache"
   export PYRE_ROOT="$BATS_TEST_TMPDIR/root" LOG="$BATS_TEST_TMPDIR/applied"
   mkdir -p "$HOME" "$PYRE_ROOT"
   state="$XDG_STATE_HOME/pyre/reconcile/user"
@@ -179,4 +181,69 @@ boot_tree() {
   [ "$(PYRE_CMDLINE="$BATS_TEST_TMPDIR/cmdline" booted_snapshot)" = 7 ]
   echo "rd.luks.name=x=root rootflags=subvol=@ rw" >"$BATS_TEST_TMPDIR/cmdline"
   [ -z "$(PYRE_CMDLINE="$BATS_TEST_TMPDIR/cmdline" booted_snapshot)" ]
+}
+
+# noctalia_stub: a fake noctalia whose color scheme lives in a file.
+noctalia_stub() {
+  scheme="$BATS_TEST_TMPDIR/scheme"
+  printf 'builtin Noctalia\n' >"$scheme"
+  cat >"$BATS_TEST_TMPDIR/bin/noctalia" <<STUB
+#!/bin/bash
+echo "noctalia \$*" >> "$LOG"
+[ "\$1" = msg ] || exit 2
+case "\$2" in
+  color-scheme-get) cat "$scheme" ;;
+  color-scheme-set) [ -e "$BATS_TEST_TMPDIR/down" ] && exit 1; echo "\$3 \$4" > "$scheme" ;;
+  theme-mode-set) ;;
+  *) exit 2 ;;
+esac
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/noctalia"
+  mkdir -p "$PYRE_ROOT/usr/share/pyre/themes"
+  cp -r "$BATS_TEST_DIRNAME/../themes/." "$PYRE_ROOT/usr/share/pyre/themes/"
+}
+
+@test "theme list shows the installed themes and marks the active one" {
+  noctalia_stub
+  run pyre theme list
+  [ "$status" -eq 0 ]
+  [[ "$output" == "  ember"*"Ember"* ]]
+  printf 'custom Ember\n' >"$scheme"
+  run pyre theme list
+  [[ "$output" == "* ember"* ]]
+  run pyre theme current
+  [ "$status" -eq 0 ]
+  [ "$output" = ember ]
+}
+
+@test "theme set links the palette, tells Noctalia, and records the theme" {
+  noctalia_stub
+  run pyre theme set EMBER
+  [ "$status" -eq 0 ]
+  [ "$(readlink "$HOME/.config/noctalia/palettes/Ember.json")" = "$PYRE_ROOT/usr/share/pyre/themes/ember/palette.json" ]
+  [ "$(cat "$scheme")" = "custom Ember" ]
+  grep -qx 'noctalia msg theme-mode-set dark' "$LOG"
+  [ "$(cat "$XDG_STATE_HOME/pyre/theme")" = ember ]
+}
+
+@test "theme set refuses unknown names, a stopped Noctalia, and never replaces the user's palette file" {
+  noctalia_stub
+  run pyre theme set no-such-theme
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no theme named"* ]]
+
+  touch "$BATS_TEST_TMPDIR/down"
+  run pyre theme set ember
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"is it running"* ]]
+  [ ! -e "$XDG_STATE_HOME/pyre/theme" ]
+  rm "$BATS_TEST_TMPDIR/down"
+
+  rm "$HOME/.config/noctalia/palettes/Ember.json"
+  printf 'mine\n' >"$HOME/.config/noctalia/palettes/Ember.json"
+  run pyre theme set ember
+  [ "$status" -ne 0 ]
+  [ "$(cat "$HOME/.config/noctalia/palettes/Ember.json")" = mine ]
+  run pyre theme current
+  [ "$status" -ne 0 ]
 }

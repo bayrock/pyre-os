@@ -24,10 +24,12 @@ layout {
         proportion 0.66667
     }
     default-column-width { proportion 0.5; }
+    // Ember's colors, used until Noctalia writes the theme's (noctalia.kdl).
     focus-ring {
         width 3
-        active-color "#ff8a3d"
-        inactive-color "#4a4038"
+        active-color "#d9803c"
+        inactive-color "#564335"
+        urgent-color "#f4514f"
     }
     border {
         off

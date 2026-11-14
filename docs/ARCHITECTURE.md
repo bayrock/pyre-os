@@ -161,20 +161,24 @@ Bundles are meta-packages: `pyre-bundle-dev`, `-media` and `-office`. `pyre inst
 
 The installer will offer bundles once the TUI is exercised.
 
-### Theme system (`themes/`, `templates/`, package `pyre-themes`)
+### Theme system (`themes/`, package `pyre-themes`, ADR 0015)
 
-- **A theme** is a directory containing:
-  - `palette.toml`: semantic roles such as background and surface steps, foreground steps, accent, selection, the 16 ANSI colors, and `mode=dark|light`
-  - `wallpapers/`
-  - optional per-app overrides, which are data only and never code
-- **Applying a theme.** `pyre theme set <name>` renders `templates/*` with matugen, which is in `extra`, into a staging directory. It then swaps the directory into place at `~/.local/state/pyre/theme/` and signals running apps: niri reloads, foot reloads its colors, and Noctalia's palette is updated.
-- **Coverage:** niri, Noctalia, foot, GTK 3/4, Qt (qt6ct), btop, neovim, fcitx5, and the Limine, Plymouth, and greeter palettes where feasible.
+- **A theme is a Noctalia palette.** Each one is a directory, `themes/<id>/`, installed to `/usr/share/pyre/themes/<id>/`:
+  - `theme.toml` holds `name`, `description` and `mode`
+  - `palette.json` is in Noctalia's palette format 2: 16 Material roles plus terminal and ANSI colors
+  - later, `wallpapers/`
+  - data only, never code. `tools/check-themes` checks the schema and WCAG contrast.
+- **Applying a theme.**
+  1. The user reconcile unit `002-theme-palettes` links each palette into `~/.config/noctalia/palettes/`.
+  2. Noctalia's defaults select Ember, and Noctalia renders the palette into the apps through its built-in templates, live, on every change.
+  3. `pyre theme set <name>` switches through `noctalia msg color-scheme-set custom <name>`.
+- **Coverage:** Noctalia, the greeter (Noctalia's appearance sync), niri, foot, GTK 3/4 (with `adw-gtk-theme`) and btop. Qt follows when a default app uses it. Limine and Plymouth come later, through a root-owned step that reads the active `palette.json`.
 - **Shipped themes:** "Ember" is the default, plus a small curated set built from palettes whose licenses have been checked. No third-party theme artwork is copied.
 
 ### CLI (`src/cli/`, package `pyre-cli`)
 
 - **One entrypoint,** `pyre <command>` (ADR 0014). Commands are files in `/usr/lib/pyre/commands/` with `# help:` and `# usage:` header metadata. The shared library is in `/usr/lib/pyre/lib/`, and the reconcile units are in `/usr/lib/pyre/reconcile/{system,user}/`.
-- **Commands:** `update`, `snapshot`, `rollback`, `doctor`, `reconcile`, `hw`, `install`/`remove <bundle>`, `help`. `theme` comes in P5.
+- **Commands:** `update`, `snapshot`, `rollback`, `doctor`, `reconcile`, `hw`, `install`/`remove <bundle>`, `theme`, `help`.
 - **Triggers:** an ALPM hook (`pyre-reconcile.hook`) runs system reconcile after `pyre-*` packages change, and `pyre-reconcile.service` (a user unit enabled globally) runs user reconcile at login.
 - **Budget:** under 5,000 lines total for the CLI plus the installer before 1.0. Every command needs a test, and anything over budget needs a reason in its ADR.
 
@@ -214,7 +218,7 @@ defaults/                  → /usr/share/pyre/defaults
 skel/                      → /etc/skel (user stubs that include the defaults)
 src/desktop/               small desktop helpers (pyre-record)
 system/                    → package-owned drop-ins
-themes/  templates/        theme data and matugen templates
+themes/                    theme data: theme.toml and a Noctalia palette per theme
 iso/                       archiso profile (releng-derived)
 tests/                     bats unit tests, VM e2e scenarios
 tools/                     build-pkgs, build-iso, run-vm, test-e2e, publish-repo

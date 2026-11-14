@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""Check every theme under themes/ (ADR 0015).
+
+Each theme directory needs a theme.toml (name, description, mode) and a
+palette.json in Noctalia's palette format 2. Every color role Noctalia reads
+must be present as #rrggbb, and the text pairs must meet WCAG contrast:
+7:1 for body text, 4.5:1 for secondary text, accents' on-colors and the
+terminal's ANSI colors, 3:1 for the accent against the surface.
+
+Usage: tools/check-themes [THEME_DIR ...]   (default: every themes/*/)
+"""
+import json
+import pathlib
+import re
+import sys
+import tomllib
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROLES = ["primary", "on_primary", "secondary", "on_secondary", "tertiary", "on_tertiary",
+         "error", "on_error", "surface", "on_surface", "on_surface_variant",
+         "surface_container", "outline_variant", "shadow", "hover", "on_hover"]
+TERMINAL = ["background", "foreground", "cursor", "cursor_text", "selection_bg", "selection_fg"]
+ANSI = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
+HEX = re.compile(r"^#[0-9a-f]{6}$")
+
+
+def luminance(color):
+    def channel(i):
+        c = int(color[i:i + 2], 16) / 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5)
+
+
+def contrast(a, b):
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def check_variant(name, v, errors):
+    for role in ROLES:
+        if not HEX.match(str(v.get(role, ""))):
+            errors.append(f"{name}: {role} must be a lowercase #rrggbb color")
+    term = v.get("terminal", {})
+    for key in TERMINAL:
+        if not HEX.match(str(term.get(key, ""))):
+            errors.append(f"{name}: terminal.{key} must be a lowercase #rrggbb color")
+    for group in ("normal", "bright"):
+        for key in ANSI:
+            if not HEX.match(str(term.get(group, {}).get(key, ""))):
+                errors.append(f"{name}: terminal.{group}.{key} must be a lowercase #rrggbb color")
+    if errors:
+        return
+    s = v["surface"]
+    pairs = [("on_surface on surface", v["on_surface"], s, 7),
+             ("on_surface on surface_container", v["on_surface"], v["surface_container"], 7),
+             ("on_surface_variant on surface", v["on_surface_variant"], s, 4.5),
+             ("on_hover on hover", v["on_hover"], v["hover"], 4.5),
+             ("primary on surface", v["primary"], s, 3)]
+    pairs += [(f"on_{r} on {r}", v[f"on_{r}"], v[r], 4.5) for r in ("primary", "secondary", "tertiary", "error")]
+    pairs += [("terminal foreground", term["foreground"], term["background"], 7),
+              ("terminal selection", term["selection_fg"], term["selection_bg"], 4.5)]
+    pairs += [(f"terminal {g}.{k}", term[g][k], term["background"], 4.5)
+              for g in ("normal", "bright") for k in ANSI if (g, k) != ("normal", "black")]
+    for label, fg, bg, need in pairs:
+        ratio = contrast(fg, bg)
+        if ratio < need:
+            errors.append(f"{name}: {label} is {ratio:.2f}:1, needs {need}:1")
+
+
+def check_theme(path):
+    errors = []
+    meta_file, palette_file = path / "theme.toml", path / "palette.json"
+    if not re.match(r"^[a-z][a-z0-9-]*$", path.name):
+        errors.append(f"{path.name}: theme directories are lowercase names")
+    try:
+        meta = tomllib.loads(meta_file.read_text())
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return [f"{path.name}: theme.toml: {exc}"]
+    for key in ("name", "description", "mode"):
+        if not isinstance(meta.get(key), str) or not meta[key]:
+            errors.append(f"{path.name}: theme.toml needs {key}")
+    if meta.get("mode") not in ("dark", "light"):
+        errors.append(f"{path.name}: mode must be dark or light")
+    if not re.match(r"^[A-Za-z][A-Za-z0-9 -]*$", str(meta.get("name", ""))):
+        errors.append(f"{path.name}: name becomes a file name, so letters, digits, spaces and '-' only")
+    try:
+        palette = json.loads(palette_file.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        return errors + [f"{path.name}: palette.json: {exc}"]
+    if palette.get("version") != 2:
+        errors.append(f"{path.name}: palette.json must be Noctalia palette version 2")
+    variants = [k for k in ("dark", "light") if k in palette]
+    if "dark" not in variants:
+        errors.append(f"{path.name}: palette.json needs a dark variant")
+    for variant in variants:
+        check_variant(f"{path.name} ({variant})", palette[variant], errors)
+    return errors
+
+
+def main(argv):
+    dirs = [pathlib.Path(a) for a in argv] or sorted(p for p in (ROOT / "themes").iterdir() if p.is_dir())
+    if not dirs:
+        print("check-themes: no themes found", file=sys.stderr)
+        return 1
+    failed = 0
+    for theme in dirs:
+        errors = check_theme(theme)
+        for error in errors:
+            print(f"FAIL: {error}", file=sys.stderr)
+        failed += bool(errors)
+        if not errors:
+            print(f"ok {theme.name}")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

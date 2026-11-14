@@ -9,8 +9,19 @@ telemetry_enabled = false
 # PyreOS presets the theme, so Noctalia's first-run wizard is not shown.
 setup_wizard_enabled = false
 
+# The PyreOS theme (ADR 0015): Ember, a custom palette that pyre links into
+# ~/.config/noctalia/palettes/. "pyre theme set" or Noctalia's settings
+# window switches it; both write ~/.local/state/noctalia/settings.toml.
 [theme]
 mode = "dark"
+source = "custom"
+custom_palette = "Ember"
+
+# Noctalia recolors these apps from the palette. The user stubs already
+# include the generated files, so Noctalia does not edit your configs.
+[theme.templates]
+enable_builtin_templates = true
+builtin_ids = ["niri", "foot", "gtk3", "gtk4", "btop"]
 
 # Lock after 10 minutes idle and turn the screens off a minute later.
 # Noctalia locks before suspend by default.

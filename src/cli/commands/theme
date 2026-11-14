@@ -1,0 +1,67 @@
+# shellcheck shell=bash
+# help: list or switch the desktop theme
+# usage: pyre theme [list]   |   pyre theme set <name>   |   pyre theme current
+#   list         the installed themes, the current one marked with *
+#   set NAME     switch to theme NAME: Noctalia recolors the shell and the
+#                apps it themes (niri, foot, GTK, btop) live
+#   current      the current theme's id
+# A theme is a Noctalia palette (ADR 0015). Noctalia's own settings window can
+# pick any other palette; pyre theme only lists and sets the PyreOS themes.
+
+# shellcheck source=src/cli/lib/theme.sh
+source "$PYRE_LIB/lib/theme.sh"
+
+# theme_active: the id of the theme Noctalia shows now, or nothing when it
+# shows a palette that is not a PyreOS theme or is not running.
+theme_active() {
+  local kind name id
+  read -r kind name < <(noctalia msg color-scheme-get 2>/dev/null) || return 0
+  [[ "$kind" == custom ]] || return 0
+  while IFS= read -r id; do
+    [[ "$(theme_field "$id" name)" == "$name" ]] && { printf '%s\n' "$id"; return 0; }
+  done < <(theme_ids)
+  return 0
+}
+
+theme_list() {
+  local id active mark
+  active="$(theme_active)"
+  [[ -n "$(theme_ids)" ]] || die "no themes installed (pyre-themes)"
+  while IFS= read -r id; do
+    mark=" "
+    [[ "$id" == "$active" ]] && mark="*"
+    printf '%s %-12s %-12s %s\n' "$mark" "$id" "$(theme_field "$id" name)" "$(theme_field "$id" description)"
+  done < <(theme_ids)
+}
+
+theme_set() {
+  local id name mode
+  [[ -n "${1:-}" ]] || die "theme set needs a theme name (pyre theme list)"
+  id="$(theme_resolve "$1")" || die "no theme named $1 (pyre theme list)"
+  name="$(theme_field "$id" name)"
+  mode="$(theme_field "$id" mode)"
+  command -v noctalia >/dev/null 2>&1 || die "Noctalia is not installed"
+  theme_linked "$id" || theme_link "$id" || die "cannot link the $name palette"
+  noctalia msg color-scheme-set custom "$name" >/dev/null ||
+    die "Noctalia did not take the theme; is it running in this session?"
+  if [[ -n "$mode" ]]; then
+    noctalia msg theme-mode-set "$mode" >/dev/null || warn "could not set $mode mode"
+  fi
+  printf '%s\n' "$id" | write_atomic "${XDG_STATE_HOME:-$HOME/.local/state}/pyre/theme"
+  info "theme: $name"
+}
+
+cmd_theme() {
+  case "${1:-list}" in
+    list) theme_list ;;
+    set) theme_set "${2:-}" ;;
+    current)
+      local id
+      id="$(theme_active)"
+      [[ -n "$id" ]] || die "Noctalia shows no PyreOS theme (or is not running)"
+      printf '%s\n' "$id"
+      ;;
+    -h | --help) command_usage "${BASH_SOURCE[0]}" ;;
+    *) die "theme: unknown subcommand $1 (pyre help theme)" ;;
+  esac
+}

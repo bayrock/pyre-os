@@ -3,6 +3,10 @@
 // Reference: https://github.com/niri-wm/niri/wiki and docs/KEYBINDINGS.md.
 include "/usr/share/pyre/defaults/niri/pyre.kdl"
 
+// The theme's colors, written by Noctalia from the current palette (pyre theme).
+// Optional: until Noctalia first writes it, niri uses the defaults above.
+include optional=true "noctalia.kdl"
+
 // Your settings go here. For example, a monitor layout:
 // output "DP-1" {
 //     mode "1920x1080@60"

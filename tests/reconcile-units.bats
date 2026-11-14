@@ -5,6 +5,9 @@
 setup() {
   repo="$BATS_TEST_DIRNAME/.."
   export PYRE_ROOT="$BATS_TEST_TMPDIR/root" HOME="$BATS_TEST_TMPDIR/home"
+  # Every XDG base directory points into the test tree, never the real home.
+  export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_HOME="$HOME/.local/share"
+  export XDG_STATE_HOME="$HOME/.local/state" XDG_CACHE_HOME="$HOME/.cache"
   mkdir -p "$PYRE_ROOT" "$HOME"
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   PATH="$BATS_TEST_TMPDIR/bin:$PATH"
@@ -78,4 +81,23 @@ EOF
 
   printf 'edited\n' >"$HOME/.bashrc"
   ( source "$repo/src/cli/reconcile/user/001-home-stubs"; check )
+}
+
+@test "user/002-theme-palettes links every theme's palette, keeps the user's own file, and holds after" {
+  mkdir -p "$PYRE_ROOT/usr/share/pyre/themes"
+  cp -r "$repo/themes/." "$PYRE_ROOT/usr/share/pyre/themes/"
+  mkdir -p "$PYRE_ROOT/usr/share/pyre/themes/second"
+  printf 'name = "Second"\ndescription = "x"\nmode = "dark"\n' >"$PYRE_ROOT/usr/share/pyre/themes/second/theme.toml"
+  printf '{}\n' >"$PYRE_ROOT/usr/share/pyre/themes/second/palette.json"
+  palettes="$HOME/.config/noctalia/palettes"
+  mkdir -p "$palettes"
+  printf 'mine\n' >"$palettes/Second.json"
+
+  converge_twice "$repo/src/cli/reconcile/user/002-theme-palettes"
+  [ "$(readlink "$palettes/Ember.json")" = "$PYRE_ROOT/usr/share/pyre/themes/ember/palette.json" ]
+  [ "$(cat "$palettes/Second.json")" = mine ]
+
+  # A stale link (a theme moved) is repointed.
+  ln -sfn /nonexistent "$palettes/Ember.json"
+  ( source "$repo/src/cli/reconcile/user/002-theme-palettes"; ! check; apply; check )
 }

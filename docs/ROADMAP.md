@@ -46,7 +46,7 @@ Phases run in order. A phase is accepted only when its exit criteria pass with e
 
 ## P5: Polish and identity (next)
 
-- Build the theme system: `palette.toml`, matugen templates, and `pyre theme`.
+- Build the theme system on Noctalia's palettes and templates (ADR 0015), with `pyre theme`.
 - Ship the "Ember" default theme plus curated alternatives.
 - Brand Limine, Plymouth, the greeter, and wallpapers.
 - Add a welcome/onboarding flow and user documentation.

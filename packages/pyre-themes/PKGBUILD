@@ -1,0 +1,18 @@
+# Maintainer: PyreOS contributors
+# The PyreOS themes (ADR 0015): one directory per theme under themes/ of this
+# repository, so the package is built in place. Each holds data only: a
+# theme.toml and a Noctalia palette (palette.json).
+pkgname=pyre-themes
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='PyreOS themes: Ember (default)'
+arch=(any)
+url='https://github.com/bayrock/pyre-os'
+license=(MIT)
+
+package() {
+  local root="$startdir/../.." file
+  while IFS= read -r -d '' file; do
+    install -Dm644 "$root/themes/$file" "$pkgdir/usr/share/pyre/themes/$file"
+  done < <(cd "$root/themes" && find . -type f -printf '%P\0')
+}

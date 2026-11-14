@@ -94,6 +94,12 @@ stage_desktop() {
   session_helpers
   expect keyring-unlocked 'ls /home/'"$user"'/.local/share/keyrings/' 'login\.keyring'
   expect login-reconcile 'u systemctl --user show pyre-reconcile.service -p Result --value' '^success$'
+  # Ember from the first login (ADR 0015): the installer linked its palette, and
+  # Noctalia wrote the theme into the apps without editing the user's configs.
+  expect theme-ember 'u noctalia msg color-scheme-get' '^custom Ember$'
+  expect theme-niri 'grep -c "#d9803c" /home/'"$user"'/.config/niri/noctalia.kdl' '^[1-9]'
+  expect theme-foot 'grep -c "^background=1c1611" /home/'"$user"'/.config/foot/themes/noctalia' '^1$'
+  expect theme-stubs-untouched 'cmp /etc/skel/.config/niri/config.kdl /home/'"$user"'/.config/niri/config.kdl && cmp /etc/skel/.config/foot/foot.ini /home/'"$user"'/.config/foot/foot.ini && echo untouched' '^untouched$'
   shot login
 
   # Config layering: every stub includes the PyreOS defaults (ADR 0013).
