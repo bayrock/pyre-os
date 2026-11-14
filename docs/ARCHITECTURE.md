@@ -140,6 +140,7 @@ Each include mechanism is verified for real in P3 before it is relied on.
 | Bluetooth | bluez |
 | Power | power-profiles-daemon |
 | Polkit agent, idle/lock | Noctalia (`polkit_agent = true`; lock at 10 min, screens off at 11; ADR 0013) |
+| Night light | Noctalia's gamma service on niri's `wlr-gamma-control`; no separate gamma daemon. Off by default. `Mod+Ctrl+N` holds it on, and PyreOS's defaults give its schedule fixed hours (20:00 to 07:00), so it needs no location lookup |
 | Firewall | firewalld, stock `public` zone (ADR 0012) |
 
 ### Default applications

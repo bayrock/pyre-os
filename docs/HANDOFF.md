@@ -4,9 +4,9 @@
 
 Everything P6 can prove in a VM is built and passing on the ISO that will be installed (STATUS has the table). What is left touches the host's disks and firmware, so **the owner runs it** and the agent prepares, tests in VMs, and fixes what the machine shows.
 
-1. **Done on 2026-11-14:** the ISO is rebuilt and verified (`build/out/pyreos-2026.11.14-x86_64.iso`, sha256 in STATUS), and `tools/test-iso`, `test-e2e`, `test-machine` and `test-nvidia` pass on it. If a package changes before the install, rebuild (`tools/build-pkgs && sudo tools/build-iso`) and run the four again.
+1. **Done on 2026-11-14:** the ISO is rebuilt and verified (`build/out/pyreos-2026.11.14-x86_64.iso`, sha256 in STATUS), and `tools/test-iso`, `test-e2e`, `test-machine` and `test-nvidia` pass on it. If a package changes before the install, rebuild (`tools/build-pkgs && sudo tools/build-iso`) and run the four again. One has: `pyre-desktop` 0.3.3 (night light) is newer than this ISO. It needs no rebuild, because an install from this ISO gets it from the testing channel with its first `pyre update`.
 2. **Owner: the safety net and the install**, step by step in `docs/reference/migration.md`: the home archive, the whole-disk image, the USB stick started through its **"UEFI:"** entry (the machine boots in BIOS mode today), then `pyre-install` onto the 120 GB SSD with autologin and hibernation.
-3. **On the installed machine:** `tools/hw-report`, then the overlay (`../pyre-overlay`, `./install`). Check what only hardware shows: the output names, 240 Hz and VRR, suspend and hibernate, Bluetooth, the USB audio, the bar on the portrait screen, the Windows entry.
+3. **On the installed machine:** `tools/hw-report`, then the overlay (`../pyre-overlay`, `./install`). Check what only hardware shows: the output names, 240 Hz and VRR, suspend and hibernate, Bluetooth, the USB audio, the bar on the portrait screen, the Windows entry, and night light's tint on every screen (**Super + Ctrl + N**; no VM shows it).
 4. **Fix what the machine shows.** Log each issue in STATUS's P6 table; critical ones block the exit.
 5. **A week of daily use** with the issues logged is the exit criterion (ROADMAP).
 

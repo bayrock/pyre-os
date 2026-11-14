@@ -19,6 +19,7 @@ The keymap keeps niri's own defaults for windows, columns, workspaces and monito
 | `Mod+S` | Control center: audio, network, Bluetooth, power |
 | `Mod+Ctrl+V` | Clipboard history |
 | `Mod+Shift+N` | Do not disturb on or off |
+| `Mod+Ctrl+N` | Night light on or off: warmer screen colors, at once |
 | `Mod+Shift+,` | Shell settings |
 | `Mod+Shift+E` | Session menu: lock, log out, reboot, shut down |
 | `Super+Alt+L` | Lock the screen |

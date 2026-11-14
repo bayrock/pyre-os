@@ -15,6 +15,7 @@ binds {
     Mod+S hotkey-overlay-title="Control center" { spawn "noctalia" "msg" "panel-toggle" "control-center"; }
     Mod+Ctrl+V hotkey-overlay-title="Clipboard history" { spawn "noctalia" "msg" "panel-toggle" "clipboard"; }
     Mod+Shift+N hotkey-overlay-title="Do not disturb" { spawn "noctalia" "msg" "notification-dnd-toggle"; }
+    Mod+Ctrl+N hotkey-overlay-title="Night light" { spawn "noctalia" "msg" "nightlight-force-toggle"; }
     Mod+Shift+Comma hotkey-overlay-title="Shell settings" { spawn "noctalia" "msg" "settings-toggle"; }
     Mod+Shift+E hotkey-overlay-title="Session menu" { spawn "noctalia" "msg" "panel-toggle" "session"; }
     Super+Alt+L hotkey-overlay-title="Lock the screen" { spawn "noctalia" "msg" "session" "lock"; }

@@ -197,6 +197,12 @@ Last updated: 2026-11-14
   - Noctalia covers the polkit agent (`[shell] polkit_agent`, off by default), the lock screen (`noctalia msg session lock`, also reached by `loginctl lock-session`), idle behaviours through `ext-idle-notify` (lock and screen-off seeded but disabled by default), clipboard history, notifications and OSDs. Telemetry defaults to off. Recording is an official plugin fetched from git, which PyreOS does not ship.
   - noctalia-greeter runs under greetd as `noctalia-greeter-session` (its own wlroots compositor) as user `greeter`. Its upstream setup rewrites `/etc/greetd/config.toml` by hand. Arch's `system-login` PAM stack already has `pam_systemd`, so its PAM patch is not needed.
   - archinstall 4.5 creates users before it installs the extra `packages`, so `/etc/skel` files from those packages never reach the first user.
+- **Night light, read from Noctalia 5.5.0 on 2026-11-14** (`docs/user/services/night-light.mdx`, `docs/user/services/location.mdx` and `src/system/gamma_service.cpp` at tag `v5.5.0`):
+  - Noctalia sets the color temperature itself through `wlr-gamma-control`, which niri implements, so no separate gamma daemon is needed.
+  - `[nightlight] enabled` follows the `[location]` schedule, and `force` holds the night temperature at once (4000 K against 6500 K by default). The schedule fades over an hour around each boundary; everything else applies at once.
+  - An enabled night light with no coordinates and no custom schedule does nothing but log a warning. A custom schedule (`custom_schedule`, `sunset`, `sunrise`) needs no location and overrides coordinates.
+  - `nightlight-toggle`, `nightlight-force-toggle`, the control center's button and the bar widget change the running shell only, and a new login starts from the saved settings. The settings window writes the saved value.
+  - `noctalia msg status` does not report night light; the shell logs `target <N>K (day=… night=… force=…)` when the temperature it asks for changes.
 
 ## Open questions
 

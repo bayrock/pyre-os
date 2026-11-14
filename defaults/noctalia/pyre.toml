@@ -50,6 +50,17 @@ kind = "path"
 location = "/usr/share/pyre/noctalia/plugins"
 enabled = true
 
+# Night light is Noctalia's own blue light filter, and it is off until you
+# turn it on. Mod+Ctrl+N holds the warm light on at once. The control
+# center's button and the settings follow a schedule instead, and this is
+# the schedule: a fixed evening and morning, because PyreOS looks nothing up
+# to learn where you are. To follow the real sunset, set a place under
+# Settings > Location and turn "Custom Schedule" off there.
+[location]
+custom_schedule = true
+sunset = "20:00"
+sunrise = "07:00"
+
 # Lock after 10 minutes idle and turn the screens off a minute later.
 # Noctalia locks before suspend by default.
 [idle.behavior.lock]
