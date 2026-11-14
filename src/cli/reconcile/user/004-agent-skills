@@ -1,0 +1,44 @@
+# shellcheck shell=bash disable=SC2034 # since is read by the engine
+# about: link the PyreOS agent skills where coding agents look for them (ADR 0019)
+# Coding agents read skills from the user's home: Claude Code from
+# ~/.claude/skills, and Codex, Gemini CLI and opencode from ~/.agents/skills.
+# Each skill in /usr/share/pyre/skills/ gets a link in both, which follows
+# package updates. Anything of your own under the same name is left alone,
+# including a link that points somewhere else.
+since=4
+
+skills="$PYRE_ROOT/usr/share/pyre/skills"
+agent_dirs=("$HOME/.claude/skills" "$HOME/.agents/skills")
+
+# pending: "skill link" pairs still to make, one per line.
+pending() {
+  local skill agent_dir link
+  for skill in "$skills"/*/; do
+    skill="${skill%/}"
+    [[ -f "$skill/SKILL.md" ]] || continue
+    for agent_dir in "${agent_dirs[@]}"; do
+      link="$agent_dir/${skill##*/}"
+      if [[ -L "$link" ]]; then
+        # Ours when it points into the PyreOS skills; repoint it if stale.
+        [[ "$(readlink -- "$link")" == "$skills"/* ]] || continue
+        [[ "$(readlink -- "$link")" == "$skill" ]] && continue
+      elif [[ -e "$link" ]]; then
+        continue
+      fi
+      printf '%s\t%s\n' "$skill" "$link"
+    done
+  done
+  return 0
+}
+
+check() {
+  [[ -z "$(pending)" ]]
+}
+
+apply() {
+  local skill link
+  while IFS=$'\t' read -r skill link; do
+    mkdir -p -- "$(dirname -- "$link")"
+    ln -sfn -- "$skill" "$link"
+  done < <(pending)
+}

@@ -31,6 +31,7 @@ More software is one command away; see the Software page.
 - **Theme:** `pyre theme set birch` in a terminal, or the welcome panel. The Themes page explains.
 - **Shell settings:** **Super + Shift + ,** opens Noctalia's settings: the bar, the dock, the wallpaper, night light and more.
 - **Your config files** live in `~/.config`. PyreOS loads its defaults first and your files second, so whatever you set wins, and PyreOS never rewrites your files.
+- **With a coding agent:** if you use Claude Code, Codex, Gemini CLI or opencode, it already knows its way around. PyreOS gives each of them a skill named `pyre` that explains the system, so you can ask for a keybinding, a monitor layout or a rollback in plain words. The agents themselves are not installed; that choice is yours.
 
 ## The welcome panel
 

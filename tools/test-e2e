@@ -62,6 +62,9 @@ stage_first_boot() {
   # --- lifecycle state from the installer (P4, ADR 0014) ------------------------
   expect reconcile-system 'cat /var/lib/pyre/reconcile/system' '^[1-9][0-9]*$'
   expect reconcile-user 'cat /home/'"$user"'/.local/state/pyre/reconcile/user' '^[1-9][0-9]*$'
+  # The agent skill (ADR 0019), linked for the first user by that reconcile.
+  # shellcheck disable=SC2016 # typed into the guest verbatim.
+  expect agent-skill 'for d in .claude .agents; do [ "$(readlink /home/'"$user"'/$d/skills/pyre)" = /usr/share/pyre/skills/pyre ] && grep -qx "name: pyre" /home/'"$user"'/$d/skills/pyre/SKILL.md && echo linked; done | wc -l' '^2$'
   expect home-snapshot-access 'grep ^ALLOW_GROUPS= /etc/snapper/configs/home' 'wheel'
   expect cmdline-append 'grep -c "^KERNEL_CMDLINE\[default\]+=" /etc/default/limine' '^1$'
   # shellcheck disable=SC2016 # typed into the guest verbatim.

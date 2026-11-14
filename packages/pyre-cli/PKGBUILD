@@ -1,11 +1,12 @@
 # Maintainer: PyreOS contributors
 # The pyre lifecycle tool, reconcile units and hardware rules (ADR 0007,
-# ADR 0014). The sources are in src/cli/, src/hw/ and system/ of this
-# repository, so the package is built in place.
+# ADR 0014), and the agent skill (ADR 0019). The sources are in src/cli/,
+# src/hw/, skills/ and system/ of this repository, so the package is built in
+# place.
 pkgname=pyre-cli
-pkgver=0.3.1
+pkgver=0.4.0
 pkgrel=1
-pkgdesc='PyreOS lifecycle tool: update, snapshot, rollback, doctor, reconcile, themes, welcome, hardware rules'
+pkgdesc='PyreOS lifecycle tool: update, snapshot, rollback, doctor, reconcile, themes, welcome, hardware rules, agent skill'
 arch=(any)
 url='https://github.com/bayrock/pyre-os'
 license=(MIT)
@@ -20,6 +21,9 @@ package() {
     find "$root/src/cli/$dir" -maxdepth 1 -type f -exec install -m644 -t "$pkgdir/usr/lib/pyre/$dir" {} +
   done
   (cd "$root/src/hw" && find rules files -type f -exec install -Dm644 {} "$pkgdir/usr/share/pyre/hw/{}" \;)
+  # The agent skills, which the user unit 004-agent-skills links into each
+  # home for the coding agents that read them (ADR 0019).
+  (cd "$root/skills" && find -- * -type f -exec install -Dm644 {} "$pkgdir/usr/share/pyre/skills/{}" \;)
   install -Dm644 "$root/system/alpm/pyre-reconcile.hook" "$pkgdir/usr/share/libalpm/hooks/pyre-reconcile.hook"
   install -Dm644 "$root/system/systemd-user/pyre-reconcile.service" \
     "$pkgdir/usr/lib/systemd/user/pyre-reconcile.service"

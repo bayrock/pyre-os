@@ -43,6 +43,7 @@ Each layer only adds to the layer below it. No layer overwrites another layer's 
 | System tweaks | `/usr/lib/sysctl.d`, `/usr/lib/systemd/*.conf.d`, `/usr/lib/udev/rules.d`, `/etc/mkinitcpio.conf.d`, `/etc/limine-entry-tool.d`, `/usr/share/libalpm/hooks` | Package-owned drop-ins |
 | Admin-editable config | `/etc/...` | pacman `backup=()`, so edits survive as `.pacnew` |
 | User stubs | `/etc/skel` → `~/.config/<app>/` | Seeded once at user creation. They include the defaults and are never rewritten. |
+| Agent skill | `/usr/share/pyre/skills/<name>/` | Package-owned; linked into `~/.claude/skills/` and `~/.agents/skills/` by user reconcile (ADR 0019) |
 | Generated state | `~/.local/state/pyre/` (current theme, reconcile versions) | Written atomically by the `pyre` CLI |
 | System state | `/var/lib/pyre/` | Reconcile schema versions, hardware results |
 
@@ -192,6 +193,12 @@ The installer will offer bundles once the TUI is exercised.
 - **Triggers:** an ALPM hook (`pyre-reconcile.hook`) runs system reconcile after `pyre-*` packages change, and `pyre-reconcile.service` (a user unit enabled globally) runs user reconcile at login.
 - **Budget:** under 5,000 lines total for the CLI plus the installer before 1.0. Every command needs a test, and anything over budget needs a reason in its ADR.
 
+### Agent skill (`skills/`, shipped in `pyre-cli`, ADR 0019)
+
+- **One skill, `pyre`,** tells a coding agent on an installed machine how PyreOS is put together: which files are the user's, which are read-only, the `pyre` commands, and when to ask first. It is Markdown only, and it points to the installed defaults and the user guide instead of repeating them.
+- **The user reconcile unit `004-agent-skills`** links each skill in `/usr/share/pyre/skills/` into `~/.claude/skills/` (Claude Code) and `~/.agents/skills/` (Codex, Gemini CLI, opencode). A skill of the user's own under the same name is left alone.
+- **`tests/skill.bats`** fails when the skill names a command, theme, bundle or installed path that this repository does not have, or misses a command.
+
 ### Hardware rules (`src/hw/`, shipped in `pyre-cli`)
 
 - **Rules are data.** Each rule file in `/usr/share/pyre/hw/rules/` matches a PCI vendor, class and device range, or a CPU vendor. It maps them to packages, initramfs modules (`/etc/mkinitcpio.conf.d/50-pyre-hw.conf`), kernel arguments (`/etc/limine-entry-tool.d/50-pyre-hw.conf`) and drop-in files. `pyre hw apply` evaluates the rules at install time and on demand. A second run changes nothing, and the drop-ins of hardware that is gone are removed.
@@ -229,6 +236,7 @@ skel/                      → /etc/skel (user stubs that include the defaults)
 src/desktop/               small desktop helpers (pyre-record) and the welcome panel plugin
 system/                    → package-owned drop-ins
 themes/                    theme data: theme.toml and a Noctalia palette per theme
+skills/                    → /usr/share/pyre/skills (the agent skill, for coding agents on an installed machine)
 iso/                       archiso profile (releng-derived)
 tests/                     bats unit tests, VM e2e scenarios
 tools/                     build-pkgs, build-iso, run-vm, test-e2e, publish-repo

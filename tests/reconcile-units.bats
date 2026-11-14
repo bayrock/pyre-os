@@ -141,3 +141,43 @@ EOF
   ( source "$repo/src/cli/reconcile/system/002-greeter-appearance"; check )
   [ "$(cat "$PYRE_ROOT/var/lib/noctalia-greeter/greeter.toml")" = "$(printf '[user]\ndefault = "alice"')" ]
 }
+
+@test "user/004-agent-skills links every skill for Claude Code and the .agents readers, and holds after" {
+  skills="$PYRE_ROOT/usr/share/pyre/skills"
+  mkdir -p "$skills"
+  cp -r "$repo/skills/." "$skills/"
+  mkdir -p "$skills/second" "$skills/not-a-skill"
+  printf -- '---\nname: second\ndescription: x\n---\n' >"$skills/second/SKILL.md"
+
+  converge_twice "$repo/src/cli/reconcile/user/004-agent-skills"
+  for dir in "$HOME/.claude/skills" "$HOME/.agents/skills"; do
+    [ "$(readlink "$dir/pyre")" = "$skills/pyre" ]
+    [ "$(readlink "$dir/second")" = "$skills/second" ]
+    cmp "$dir/pyre/SKILL.md" "$repo/skills/pyre/SKILL.md"
+    [ ! -e "$dir/not-a-skill" ]
+  done
+}
+
+@test "user/004-agent-skills keeps a skill of the user's own, and repoints only its own stale link" {
+  skills="$PYRE_ROOT/usr/share/pyre/skills"
+  mkdir -p "$skills" "$HOME/.claude/skills/pyre" "$HOME/.agents/skills" "$HOME/dotfiles/pyre"
+  cp -r "$repo/skills/." "$skills/"
+  printf 'mine\n' >"$HOME/.claude/skills/pyre/SKILL.md"
+  ln -s "$HOME/dotfiles/pyre" "$HOME/.agents/skills/pyre"
+
+  # Both names are taken by the user, so there is nothing to do.
+  ( source "$repo/src/cli/reconcile/user/004-agent-skills"; check )
+  [ "$(cat "$HOME/.claude/skills/pyre/SKILL.md")" = mine ]
+  [ "$(readlink "$HOME/.agents/skills/pyre")" = "$HOME/dotfiles/pyre" ]
+
+  # A link into the PyreOS skills under another path (a skill moved) is ours.
+  ln -sfn "$skills/old-name" "$HOME/.agents/skills/pyre"
+  ( source "$repo/src/cli/reconcile/user/004-agent-skills"; ! check; apply; check )
+  [ "$(readlink "$HOME/.agents/skills/pyre")" = "$skills/pyre" ]
+  [ "$(cat "$HOME/.claude/skills/pyre/SKILL.md")" = mine ]
+}
+
+@test "user/004-agent-skills holds when no skills are installed" {
+  ( source "$repo/src/cli/reconcile/user/004-agent-skills"; check )
+  [ ! -e "$HOME/.claude" ]
+}
