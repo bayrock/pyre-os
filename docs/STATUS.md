@@ -27,6 +27,7 @@ Last updated: 2026-11-14
 - **`tools/test-machine`:** all four stages, 75 checks in 7 min 14 s. The interactive installer, typed at the keyboard, onto a disk that held an MBR table, FAT and LUKS, next to a stand-in Windows disk; then every row marked "Done in the VM" above. The desktop powered off in 4 s.
 - **`tools/test-nvidia`:** both stages, 21 checks in 10 min 42 s. The installer applied the NVIDIA rule with no failed hook and no snapshots; DKMS built `nvidia-open` 620.70.06 for both kernels; each initramfs holds the four modules; the system boots and unlocks; a second apply changes nothing, and an apply without the GPU removes the drop-ins.
 - **`tools/test-e2e`:** every stage, 96 checks. The first run stopped at the snapshot stage's first probe, on a doubled character in the serial log (below); `--from snapshot-boot` passed that stage and the rollback.
+- **CI** on the push of these changes (`1831425`): `check`, `packages` and `publish` succeeded, so the testing channel carries the four new versions.
 - **`tools/check`:** passes, with new bats tests for the swapfile and resume arguments, ESP detection, the autologin keyring, the resume-offset check, `HW_SYS`, and the boot-branding hook before Limine exists.
 
 **Found on the way:**
