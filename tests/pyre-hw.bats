@@ -38,6 +38,16 @@ pyre() {
   [[ "$output" != *"11-nvidia-legacy"* ]]
 }
 
+@test "HW_SYS replaces /sys for detection (tools/test-nvidia)" {
+  run pyre hw packages
+  [ -z "$output" ]
+  local dev="$BATS_TEST_TMPDIR/fake-sys/bus/pci/devices/0000:01:00.0"
+  mkdir -p "$dev"
+  echo 0x10de >"$dev/vendor"; echo 0x24c9 >"$dev/device"; echo 0x030000 >"$dev/class"
+  HW_SYS="$BATS_TEST_TMPDIR/fake-sys" run pyre hw packages
+  [ "$output" = "nvidia-open-dkms nvidia-utils libva-nvidia-driver linux-headers linux-lts-headers" ]
+}
+
 @test "a pre-Turing NVIDIA GPU gets the legacy note and no packages" {
   pci 0000:01:00.0 10de 1b80 030000
   run pyre hw detect

@@ -10,6 +10,9 @@
 # under hw/files mirroring the target paths), note. Detection reads sysfs and
 # /proc only; it never runs lspci, which wakes runtime-suspended dGPUs.
 
+# HW_SYS replaces /sys for detection only; tools/test-nvidia uses it to show
+# an NVIDIA GPU to an install in a VM.
+HW_SYS="${HW_SYS:-$PYRE_ROOT/sys}"
 HW_RULES="${HW_RULES:-$PYRE_ROOT/usr/share/pyre/hw/rules}"
 HW_FILES="${HW_FILES:-$PYRE_ROOT/usr/share/pyre/hw/files}"
 # shellcheck disable=SC2034 # used by commands/hw
@@ -28,7 +31,7 @@ rule_get() {
 # without 0x; class is its first four digits (base class and subclass).
 hw_pci() {
   local dev vendor device class
-  for dev in "$PYRE_ROOT"/sys/bus/pci/devices/*; do
+  for dev in "$HW_SYS"/bus/pci/devices/*; do
     [[ -r "$dev/vendor" && -r "$dev/device" && -r "$dev/class" ]] || continue
     read -r vendor <"$dev/vendor"
     read -r device <"$dev/device"

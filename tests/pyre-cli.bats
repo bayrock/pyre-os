@@ -169,6 +169,25 @@ boot_tree() {
   [[ "$output" == *"diff $HOME/.config/foot/foot.ini $HOME/.config/foot/foot.ini.pyre-new"* ]]
 }
 
+@test "doctor checks the resume offset against the swapfile only when hibernation is set up" {
+  boot_tree
+  printf '#!/bin/sh\necho 979720\n' >"$BATS_TEST_TMPDIR/bin/btrfs"
+  chmod +x "$BATS_TEST_TMPDIR/bin/btrfs"
+  run pyre doctor --boot
+  [[ "$output" != *hibernation* ]]
+
+  printf 'KERNEL_CMDLINE[default]+="rw zswap.enabled=0 resume=/dev/mapper/root resume_offset=979720 quiet splash"\n' \
+    >"$PYRE_ROOT/etc/default/limine"
+  run pyre doctor --boot
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ok    hibernation: the resume offset is /swap/swapfile's"* ]]
+
+  sed -i 's/resume_offset=979720/resume_offset=1234/' "$PYRE_ROOT/etc/default/limine"
+  run pyre doctor --boot
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"FAIL  hibernation: resume_offset=1234 in /etc/default/limine, but /swap/swapfile is at 979720"* ]]
+}
+
 @test "install and remove map bundle names to pyre-bundle packages, and refuse other names" {
   printf '#!/bin/sh\necho "pacman $*" >> "%s"\n' "$LOG" >"$BATS_TEST_TMPDIR/bin/pacman"
   chmod +x "$BATS_TEST_TMPDIR/bin/pacman"

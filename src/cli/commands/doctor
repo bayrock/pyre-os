@@ -26,7 +26,7 @@ entry_files() {
 }
 
 doctor_boot() {
-  local kernel version entries cmdline_file="$PYRE_ROOT/etc/default/limine" use path hash files sum
+  local kernel version entries cmdline_file="$PYRE_ROOT/etc/default/limine" use path hash files sum want have
   step "Boot"
   entries="$(as_root cat "$PYRE_ROOT/boot/limine.conf" 2>/dev/null)" || entries=""
   [[ -n "$entries" ]] && ok "limine.conf is present" || bad "no /boot/limine.conf"
@@ -48,6 +48,17 @@ doctor_boot() {
   done < <(installed_kernels)
   if grep -qE '^KERNEL_CMDLINE\[default\]=' "$cmdline_file" 2>/dev/null; then
     note "/etc/default/limine sets KERNEL_CMDLINE[default] with \"=\", which drops drop-in arguments; use \"+=\" (ADR 0014)"
+  fi
+  # Hibernation (ADR 0017): a resume offset that is not the swapfile's would
+  # lose the hibernated session at the next resume.
+  want="$(sed -n 's/^KERNEL_CMDLINE.*[" ]resume_offset=\([0-9]*\).*/\1/p' "$cmdline_file" 2>/dev/null | head -n 1)"
+  if [[ -n "$want" ]]; then
+    have="$(as_root btrfs inspect-internal map-swapfile -r "$PYRE_ROOT/swap/swapfile" 2>/dev/null)" || have=""
+    if [[ "$have" == "$want" ]]; then
+      ok "hibernation: the resume offset is /swap/swapfile's"
+    else
+      bad "hibernation: resume_offset=$want in /etc/default/limine, but /swap/swapfile is at ${have:-no readable offset}; set it there, then: sudo limine-update"
+    fi
   fi
   use="$(df --output=pcent "$PYRE_ROOT/boot" 2>/dev/null | tail -n 1 | tr -dc '0-9')"
   if [[ -n "$use" ]]; then
