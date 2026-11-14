@@ -21,7 +21,7 @@ inputs() {
   printf '%s\n' "packages/$1"
   case "$1" in
     pyre-cli) printf '%s\n' src/cli src/hw system/alpm system/systemd-user ;;
-    pyre-desktop) printf '%s\n' defaults skel src/desktop system/pam.d ;;
+    pyre-desktop) printf '%s\n' defaults skel src/desktop system/pam.d docs/guide landing/site/pyre-e.svg ;;
     pyre-installer) printf '%s\n' src/installer ;;
     pyre-themes) printf '%s\n' themes ;;
   esac

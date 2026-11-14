@@ -1,0 +1,60 @@
+# shellcheck shell=bash
+# help: open the welcome panel: themes, the main keys, and the user guide
+# usage: pyre welcome [guide]   |   pyre welcome --first-login   |   pyre welcome --at-login on|off
+#   guide             open it on the user guide
+#   --first-login     open it if it was never shown, or at every login when
+#                     --at-login is on (the session runs this at login)
+#   --at-login on|off greet at every login, or only the first (default)
+# The panel is a Noctalia plugin, pyre/welcome (ADR 0016). It opens by itself
+# once, at the first login; after that it is in the launcher as "Welcome to
+# PyreOS".
+
+readonly WELCOME_PLUGIN=pyre/welcome
+readonly WELCOME_PANEL=pyre/welcome:welcome
+
+welcome_state() {
+  printf '%s\n' "${XDG_STATE_HOME:-$HOME/.local/state}/pyre/welcome"
+}
+
+# welcome_open SECONDS [CONTEXT]: open the panel, retrying while Noctalia
+# starts and loads its plugins.
+welcome_open() {
+  local deadline=$((SECONDS + $1))
+  while :; do
+    noctalia msg panel-open "$WELCOME_PANEL" ${2:+"$2"} >/dev/null 2>&1 && return 0
+    (( SECONDS < deadline )) || return 1
+    sleep 1
+  done
+}
+
+cmd_welcome() {
+  local dir
+  dir="$(welcome_state)"
+  case "${1:-}" in
+    "" | guide)
+      command -v noctalia >/dev/null 2>&1 || die "Noctalia is not installed"
+      welcome_open 2 "${1:-}" && return 0
+      # Asked for by name: turn the plugin back on if it was turned off.
+      noctalia msg plugins enable "$WELCOME_PLUGIN" >/dev/null 2>&1 || true
+      welcome_open 5 "${1:-}" || die "Noctalia did not open the welcome panel; is it running in this session?"
+      ;;
+    --first-login)
+      command -v noctalia >/dev/null 2>&1 || return 0
+      [[ -f "$dir/shown" && ! -f "$dir/at-login" ]] && return 0
+      # Noctalia starts with the session; give it time to come up.
+      welcome_open "${PYRE_WELCOME_WAIT:-60}" || { warn "the welcome panel did not open"; return 0; }
+      mkdir -p -- "$dir"
+      : >"$dir/shown"
+      ;;
+    --at-login)
+      mkdir -p -- "$dir"
+      case "${2:-}" in
+        on) : >"$dir/at-login"; info "the welcome panel opens at every login" ;;
+        off) rm -f -- "$dir/at-login"; info "the welcome panel opens at the first login only" ;;
+        *) die "welcome --at-login takes on or off" ;;
+      esac
+      ;;
+    -h | --help) command_usage "${BASH_SOURCE[0]}" ;;
+    *) die "welcome: unknown option $1 (pyre help welcome)" ;;
+  esac
+}

@@ -4,7 +4,7 @@
 # stubs are in defaults/ and skel/ of this repository, so the package is built
 # in place.
 pkgname=pyre-desktop
-pkgver=0.2.1
+pkgver=0.3.0
 pkgrel=1
 pkgdesc='PyreOS desktop: niri, Noctalia, session services, default apps and defaults'
 arch=(any)
@@ -12,7 +12,9 @@ url='https://github.com/bayrock/pyre-os'
 license=(MIT)
 depends=(
   pyre-base
-  pyre-themes
+  # pyre welcome and the themes' banners, for the welcome panel
+  'pyre-cli>=0.3.0'
+  'pyre-themes>=0.3.0'
   # Session: compositor, shell, greeter, X11 apps, portals
   niri
   noctalia
@@ -79,4 +81,12 @@ package() {
   done < <(cd "$root/skel" && find . -type f -printf '%P\0')
   install -Dm644 "$root/system/pam.d/greetd-greeter" "$pkgdir/usr/lib/pam.d/greetd-greeter"
   install -Dm755 "$root/src/desktop/pyre-record" "$pkgdir/usr/bin/pyre-record"
+  # The welcome panel, a Noctalia plugin (ADR 0016), its launcher entry, and
+  # the PyreOS mark as the icon os-release names (LOGO=pyreos).
+  local plugins="$pkgdir/usr/share/pyre/noctalia/plugins"
+  install -Dm644 -t "$plugins/welcome" "$root/src/desktop/welcome/plugin.toml" "$root/src/desktop/welcome/welcome.luau"
+  install -Dm644 "$root/src/desktop/pyre-welcome.desktop" "$pkgdir/usr/share/applications/pyre-welcome.desktop"
+  install -Dm644 "$root/landing/site/pyre-e.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/pyreos.svg"
+  # The user guide, which the welcome panel reads in place.
+  install -Dm644 -t "$pkgdir/usr/share/doc/pyre/guide" "$root"/docs/guide/[0-9]*.md
 }

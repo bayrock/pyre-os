@@ -59,6 +59,8 @@ environment {
 
 // The shell: bar, launcher, notifications, lock, idle and the polkit agent.
 spawn-at-startup "noctalia"
+// "Welcome home": the welcome panel, at the first login only (pyre welcome).
+spawn-at-startup "pyre" "welcome" "--first-login"
 
 window-rule {
     geometry-corner-radius 10

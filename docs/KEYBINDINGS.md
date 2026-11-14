@@ -1,6 +1,8 @@
-# Keybindings
+# Keys
 
-The PyreOS default keymap. It is defined in `defaults/niri/binds.kdl` (installed to `/usr/share/pyre/defaults/niri/binds.kdl`), and this page must match that file. `Mod` is the Super (logo) key. `Mod+Shift+/` shows niri's overlay of the most important keys.
+The PyreOS default keymap. `Mod` is the Super key, the one with the logo on it. `Mod+Shift+/` shows niri's overlay of the most important keys.
+
+The keymap is defined in `/usr/share/pyre/defaults/niri/binds.kdl` (`defaults/niri/binds.kdl` in the source), and this page must match that file. It is also the Keys page of the user guide.
 
 The keymap keeps niri's own defaults for windows, columns, workspaces and monitors, so niri's documentation applies unchanged. PyreOS adds the app, shell and capture keys.
 

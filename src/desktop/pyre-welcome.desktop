@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to PyreOS
+GenericName=Welcome
+Comment=Welcome home: themes, the main keys, and the user guide
+Exec=pyre welcome
+Icon=pyreos
+Terminal=false
+Categories=System;Documentation;
+Keywords=welcome;guide;help;theme;keys;pyre;

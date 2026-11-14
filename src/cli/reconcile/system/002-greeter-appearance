@@ -25,7 +25,8 @@ check() {
 }
 
 # role KEY: a dark-variant color from Ember's palette.json (format 2, as
-# tools/ember-palette writes it: one role per line, four spaces in).
+# tools/theme-palettes writes it: one role per line, four spaces in, the
+# dark variant first).
 role() {
   sed -n "s/^    \"$1\": \"\\(#[0-9a-f]\\{6\\}\\)\",\\{0,1\\}\$/\\1/p" "$ember/palette.json" | head -n 1
 }

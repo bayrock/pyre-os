@@ -212,13 +212,15 @@ STUB
 }
 
 @test "theme list shows the installed themes and marks the active one" {
+  # Alphabetical: birch, ember, evergreen, frost.
   noctalia_stub
   run pyre theme list
   [ "$status" -eq 0 ]
-  [[ "$output" == "  ember"*"Ember"* ]]
+  [[ "$output" == *$'\n  ember'*"Ember"* && "$output" == "  birch"*"Birch"* ]]
   printf 'custom Ember\n' >"$scheme"
   run pyre theme list
-  [[ "$output" == "* ember"* ]]
+  [[ "$output" == *$'\n* ember'* ]]
+  [ "$(grep -c '^\*' <<<"$output")" -eq 1 ]
   run pyre theme current
   [ "$status" -eq 0 ]
   [ "$output" = ember ]
@@ -309,4 +311,57 @@ STUB
   run pyre theme set ember
   [ "$status" -eq 0 ]
   [ "$(cat "$XDG_STATE_HOME/pyre/theme/current")" = ember ]
+}
+
+# welcome_stub [STATUS]: a fake noctalia that logs its calls and exits STATUS.
+welcome_stub() {
+  printf '#!/bin/sh\necho "noctalia $*" >> "%s"\nexit %s\n' "$LOG" "${1:-0}" >"$BATS_TEST_TMPDIR/bin/noctalia"
+}
+
+@test "welcome --first-login opens the panel once, or at every login when asked" {
+  welcome_stub
+  run pyre welcome --first-login
+  [ "$status" -eq 0 ]
+  grep -qx 'noctalia msg panel-open pyre/welcome:welcome' "$LOG"
+  [ -f "$XDG_STATE_HOME/pyre/welcome/shown" ]
+  : >"$LOG"
+  run pyre welcome --first-login
+  [ "$status" -eq 0 ]
+  [ ! -s "$LOG" ]
+  run pyre welcome --at-login on
+  [ "$status" -eq 0 ]
+  run pyre welcome --first-login
+  grep -qx 'noctalia msg panel-open pyre/welcome:welcome' "$LOG"
+  run pyre welcome --at-login off
+  [ ! -e "$XDG_STATE_HOME/pyre/welcome/at-login" ]
+  run pyre welcome --at-login maybe
+  [ "$status" -eq 1 ]
+}
+
+@test "welcome --first-login never fails the session, and retries next login" {
+  welcome_stub 1
+  PYRE_WELCOME_WAIT=0 run pyre welcome --first-login
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"did not open"* ]]
+  [ ! -e "$XDG_STATE_HOME/pyre/welcome/shown" ]
+}
+
+@test "welcome opens the panel, on the guide when asked, and re-enables a disabled plugin" {
+  welcome_stub
+  run pyre welcome guide
+  [ "$status" -eq 0 ]
+  grep -qx 'noctalia msg panel-open pyre/welcome:welcome guide' "$LOG"
+  welcome_stub 1
+  run pyre welcome
+  [ "$status" -eq 1 ]
+  grep -qx 'noctalia msg plugins enable pyre/welcome' "$LOG"
+}
+
+@test "theme set birch is the light theme, with its own wallpaper" {
+  noctalia_stub
+  run pyre theme set Birch
+  [ "$status" -eq 0 ]
+  grep -qx 'noctalia msg color-scheme-set custom Birch' "$LOG"
+  grep -qx 'noctalia msg theme-mode-set light' "$LOG"
+  grep -qx "noctalia msg wallpaper-set $PYRE_ROOT/usr/share/pyre/themes/birch/wallpapers/birch.jpg" "$LOG"
 }

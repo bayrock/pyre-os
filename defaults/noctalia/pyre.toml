@@ -39,6 +39,17 @@ fill_color = "#130e0a"
 [wallpaper.default]
 path = "/usr/share/pyre/themes/ember/wallpapers/ember.jpg"
 
+# The PyreOS plugins (ADR 0016), from a read-only directory pyre-desktop
+# owns: the welcome panel ("pyre welcome").
+[plugins]
+enabled = ["pyre/welcome"]
+
+[[plugins.source]]
+name = "pyre"
+kind = "path"
+location = "/usr/share/pyre/noctalia/plugins"
+enabled = true
+
 # Lock after 10 minutes idle and turn the screens off a minute later.
 # Noctalia locks before suspend by default.
 [idle.behavior.lock]

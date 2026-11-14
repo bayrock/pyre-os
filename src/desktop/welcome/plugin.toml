@@ -1,0 +1,23 @@
+# The PyreOS welcome panel: a Noctalia plugin (ADR 0016), shipped by
+# pyre-desktop in /usr/share/pyre/noctalia/plugins/welcome/ and enabled by
+# PyreOS's Noctalia defaults. "pyre welcome" opens it; it opens by itself
+# once, at the first login.
+id = "pyre/welcome"
+name = "Welcome to PyreOS"
+version = "1.0.0"
+# runAsync with an argument array (24): the newest level this needs.
+plugin_api = 24
+author = "PyreOS"
+license = "MIT"
+icon = "home"
+description = "Welcome home: pick a theme, learn the keys, and read the guide"
+tags = ["pyreos", "welcome"]
+
+[[panel]]
+id = "welcome"
+entry = "welcome.luau"
+width = 820
+height = 620
+placement = "floating"
+position = "center"
+open_near_click = false
