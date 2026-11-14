@@ -1,13 +1,17 @@
 # Handoff
 
-## Next task: P5, or install images on the testing channel first
+## Next task: P5, polish and identity (in progress)
 
 1. **The release key: done on 2026-11-13** (`docs/reference/release-key.md`). The primary key is offline, the subkey is in the Actions secret `PYRE_SIGNING_SUBKEY`, and `pyre-keyring` 0.2.0 trusts it alongside the dev key. Release images drop the dev key in P7.
 2. **The testing channel: live on 2026-11-13** (`docs/BUILDING.md`, "The testing channel"). Every push to `main` publishes signed packages to the `testing` release, and `pyre-release` 0.3.0 points installed systems at it. **Any package change needs a `pkgver`/`pkgrel` bump**, or the publish job fails. `tools/test-channel` checks that an installed VM updates from it.
-3. **Pending ISO rebuild (user, `sudo tools/build-iso`):** the next full `tools/test-e2e` runs the new `pacman-unlocked` check in its rolled-back stage, which needs `pyre-base` 0.3.1 in the ISO's offline repository.
-4. **Optional before P5: install images.** Publishing the ISO to the `testing` release (CI needs a privileged container for mkarchiso, and the 3.7 GB image is over GitHub's 2 GiB per-asset limit, so it must be split or slimmed) would unlock the landing page's "Install" pill. The pill waits for install images, not packages (`landing/README.md`).
-5. **P5 (ROADMAP):** `palette.toml`, matugen templates, `pyre theme`, the "Ember" theme, and branding (Limine, Plymouth, the greeter, wallpapers, and the boot splash, which is still Arch artwork).
-6. **Landing page:** live at <https://bayrock.github.io/pyre-os/> (Pages source: GitHub Actions).
+3. **P5 theme system: started on 2026-11-13** (ADR 0015). A theme is a Noctalia palette in `themes/<id>/`, shipped by `pyre-themes`. Ember comes from the landing page. Noctalia's built-in templates color niri, foot, GTK 3/4 and btop, and `pyre theme` lists and sets themes. `tools/test-theme` (VM) passes. Next in P5:
+   - **Live recolor of running foot and GTK windows.** Noctalia rewrites their files live, but open windows keep their colors until restarted. Look at what Noctalia upstream plans first; foot takes OSC color sequences, and GTK needs a settings nudge.
+   - **An Ember wallpaper.** The desktop still shows Noctalia's default artwork.
+   - Limine, Plymouth and greeter branding, from the active `palette.json` (root-owned step, ADR 0015).
+   - Curated alternative themes (license-checked palettes), and the welcome flow and user docs.
+   - **Pending ISO rebuild (user, `sudo tools/build-iso`):** the next `tools/test-e2e` run checks Ember from the first login on a fresh install (`theme-ember` and the checks after it in the desktop stage).
+4. **Optional: install images.** Publishing the ISO to the `testing` release (CI needs a privileged container for mkarchiso, and the 3.7 GB image is over GitHub's 2 GiB per-asset limit, so it must be split or slimmed) would unlock the landing page's "Install" pill. The pill waits for install images, not packages (`landing/README.md`).
+5. **Landing page:** live at <https://bayrock.github.io/pyre-os/> (Pages source: GitHub Actions).
 
 ## Dev loop reference
 

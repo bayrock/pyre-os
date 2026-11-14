@@ -4,7 +4,7 @@ Last updated: 2026-11-13
 
 ## Current phase
 
-**Between P4 and P5.** P4 was accepted on 2026-11-13, and the hosted testing channel went live the same day. Next: P5, polish and identity.
+**P5, polish and identity (in progress).** P4 was accepted on 2026-11-13, and the hosted testing channel went live the same day. P5 started the same evening with the theme system (ADR 0015).
 
 **Carried over** (later phases unless reprioritized):
 
@@ -78,6 +78,16 @@ Last updated: 2026-11-13
 - **CI:** `.github/workflows/check.yml` runs two jobs in `archlinux:latest`. The `check` job runs `tools/check`, and the `packages` job runs `tools/build-pkgs` and namcap. Both were green on the push of 2026-11-08, as reported by the user from the Actions tab.
 - **Development key:** fingerprint `E150852868B407FB17F1149AE59B1D8F2343FD47`, UID "PyreOS Development Key (NOT FOR RELEASE)". The private key exists only in `build/keys/gnupg/` on the development machine.
 - **Testing channel** (2026-11-13): the `publish` job in `check.yml` runs `tools/publish-testing` on every push to `main`, into the GitHub Release `testing` (`Server = https://github.com/bayrock/pyre-os/releases/download/testing`). The first run published 11 packages. A sandboxed pacman trusting only `pyre-keyring` 0.2.0 synced and verified all of them, and a client trusting only the dev key was refused. `tools/test-channel` (VM) result: see below.
+- **Theme system (P5, 2026-11-13, ADR 0015):**
+  - `pyre-themes` 0.1.0 ships Ember (`themes/ember/`). It comes from the landing page's colors and passes `tools/check-themes` (WCAG contrast for text and ANSI colors).
+  - `pyre-cli` 0.2.0 adds `pyre theme` and the reconcile unit `002-theme-palettes`.
+  - `pyre-desktop` 0.2.0 selects Ember in Noctalia and enables Noctalia's niri, foot, GTK 3/4 and btop templates. It adds `adw-gtk-theme`, plus user stubs that already include the generated files.
+  - `tools/test-theme` passed on an overlay of the e2e disk, which tests the upgrade path for an existing user:
+    - after login, `pyre theme set ember` gives `custom Ember`
+    - niri, foot, GTK and btop files carry Ember, and the niri and foot configs validate
+    - a live switch to Noctalia's palette recolors the shell and the niri focus ring, and `pyre theme set` brings Ember back
+  - **Open:** foot and GTK windows that are already open keep their colors until restarted, though their files update live. The wallpaper is still Noctalia's default.
+- **e2e on the rebuilt ISO (2026-11-13):** `tools/test-e2e` passed every stage, including the new `pacman-unlocked` check after rollback.
 - **Fixed on the way:** a restored snap-pac "pre" snapshot carries `/var/lib/pacman/db.lck`, so pacman stayed locked after `pyre rollback`. `pyre-base` 0.3.1 clears it at boot with a tmpfiles rule.
 - **Release key** (2026-11-13, `docs/reference/release-key.md`): primary `65D123DD9A18A346A94C38E6228693F6D58F0A7F`, certify-only, kept offline. Signing subkey `279066B8C9E6FD17B3B9189C588DC5476F4A31E4`, expiring 2028-11-12, held in the Actions secret `PYRE_SIGNING_SUBKEY`. `pyre-keyring` 0.2.0 trusts it alongside the dev key.
 - **Known gaps:**
