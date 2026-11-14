@@ -134,6 +134,57 @@ EOF
   [[ "$(kernel_cmdline 1234)" == *" quiet splash console=ttyS0,115200" ]]
 }
 
+@test "kernel_cmdline resumes from the swapfile only when given its offset" {
+  config_defaults
+  [[ "$(kernel_cmdline 1234)" != *resume* ]]
+  [[ "$(kernel_cmdline 1234 "")" != *resume* ]]
+  [[ "$(kernel_cmdline 1234 533760)" == *" zswap.enabled=0 resume=/dev/mapper/root resume_offset=533760 quiet splash" ]]
+}
+
+@test "hibernation defaults to off, adds the @swap subvolume, and needs room for the swapfile" {
+  config_load "$cfg"
+  [ "${CFG[hibernation]}" = false ]
+  json="$(archinstall_config $((40 * 1024 * 1024 * 1024)) 512 a b)"
+  jq -e '[.disk_config.device_modifications[0].partitions[1].btrfs[].name] | index("@swap") | not' <<<"$json"
+
+  printf 'MemTotal:       16303476 kB\nMemFree:         1000000 kB\n' >"$BATS_TEST_TMPDIR/meminfo"
+  export PYRE_MEMINFO="$BATS_TEST_TMPDIR/meminfo"
+  [ "$(swap_mib)" -eq 15922 ]
+  CFG[hibernation]=true
+  config_check
+  json="$(archinstall_config $((40 * 1024 * 1024 * 1024)) 512 a b)"
+  jq -e '.disk_config.device_modifications[0].partitions[1].btrfs[-1] == {name: "@swap", mountpoint: "/swap"}' <<<"$json"
+  jq -e 'has("swap") | not' <<<"$json"
+  # 16 GiB for the system plus the swapfile no longer fit on a 32 GiB disk.
+  run archinstall_config $((32 * 1024 * 1024 * 1024)) 512 a b
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"disk too small: need at least $((2048 + 16384 + 15922 + 2)) MiB"* ]]
+
+  CFG[hibernation]=maybe
+  run config_check
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"hibernation must be true or false"* ]]
+}
+
+@test "the swapfile's fstab line ranks it below zram" {
+  [ "$(swapfile_fstab)" = "/swap/swapfile  none  swap  defaults,pri=0  0 0" ]
+}
+
+@test "other_esps lists FAT ESPs on other disks only" {
+  config_load "$cfg"
+  esp=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
+  lsblk_out="$(printf '%s\n' \
+    'NAME="/dev/vda" PKNAME="" PARTTYPE="" FSTYPE=""' \
+    "NAME=\"/dev/vda1\" PKNAME=\"/dev/vda\" PARTTYPE=\"$esp\" FSTYPE=\"vfat\"" \
+    'NAME="/dev/vda2" PKNAME="/dev/vda" PARTTYPE="0fc63daf-8483-4772-8e79-3d69d8477de4" FSTYPE="crypto_LUKS"' \
+    'NAME="/dev/nvme0n1p1" PKNAME="/dev/nvme0n1" PARTTYPE="de94bba4-06d1-4d40-a16a-bfd50179d6ac" FSTYPE="ntfs"' \
+    'NAME="/dev/nvme0n1p2" PKNAME="/dev/nvme0n1" PARTTYPE="C12A7328-F81F-11D2-BA4B-00A0C93EC93B" FSTYPE="vfat"' \
+    'NAME="/dev/nvme0n1p4" PKNAME="/dev/nvme0n1" PARTTYPE="ebd0a0a2-b9e5-4433-87c0-68b6b72699c7" FSTYPE="ntfs"' \
+    "NAME=\"/dev/sdb1\" PKNAME=\"/dev/sdb\" PARTTYPE=\"$esp\" FSTYPE=\"\"")"
+  [ "$(other_esps <<<"$lsblk_out")" = /dev/nvme0n1p2 ]
+  [ -z "$(other_esps </dev/null)" ]
+}
+
 @test "the ISO's offline package list covers everything the installer installs" {
   offline="$BATS_TEST_DIRNAME/../iso/offline.x86_64"
   config_load "$cfg"
@@ -168,6 +219,25 @@ EOF
   grep -qx '\[initial_session\]' <<<"$out"
   grep -qx 'command = "niri-session"' <<<"$out"
   grep -qx 'user = "pyre"' <<<"$out"
+}
+
+@test "only an autologin install gets the passwordless default keyring" {
+  config_load "$cfg"
+  calls="$BATS_TEST_TMPDIR/calls"
+  in_target() { printf '%s\n' "$*" >>"$calls"; cat >/dev/null 2>&1 </dev/stdin || true; }
+  seed_autologin_keyring </dev/null
+  [ ! -e "$calls" ]
+
+  CFG[autologin]=true
+  seed_autologin_keyring </dev/null
+  grep -qx 'runuser -u pyre -- install -d -m 700 /home/pyre/.local/share/keyrings' "$calls"
+  grep -qx 'runuser -u pyre -- sh -c umask 077 && cat >"$1" sh /home/pyre/.local/share/keyrings/Default_keyring.keyring' "$calls"
+  grep -qx 'runuser -u pyre -- sh -c cat >"$1" sh /home/pyre/.local/share/keyrings/default' "$calls"
+  out="$(keyring_file)"
+  [ "$(sed -n 1p <<<"$out")" = "[keyring]" ]
+  grep -qx 'display-name=Default keyring' <<<"$out"
+  grep -qEx 'ctime=[0-9]+' <<<"$out"
+  ! grep -qi -e password -e secret <<<"$out"
 }
 
 @test "every user stub includes a default that pyre-desktop ships" {

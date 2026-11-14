@@ -20,20 +20,32 @@ ask_secret() {
   printf '%s\n' "$first"
 }
 
-# Whole disks that can be installed to, as "PATH  SIZE  MODEL" lines.
+# disk_contents DISK: what the disk holds now ("empty", or its filesystems),
+# so that nobody erases the wrong one on a machine with several disks.
+disk_contents() {
+  local types
+  types="$(lsblk -nlo FSTYPE "$1" | awk 'NF && !seen[$1]++' | paste -sd' ')"
+  if [[ -n "$types" ]]; then printf 'holds %s\n' "$types"; else printf 'empty\n'; fi
+}
+
+# Whole disks that can be installed to, as "PATH  SIZE  MODEL  CONTENTS" lines.
 candidate_disks() {
   local medium line
   medium="$(boot_medium_disk)"
   while IFS= read -r line; do
     [[ "$line" =~ ^NAME=\"([^\"]*)\"\ TYPE=\"disk\"\ SIZE=\"([^\"]*)\"\ MODEL=\"([^\"]*)\"$ ]] || continue
     installable_disk "${BASH_REMATCH[1]}" "$medium" || continue
-    printf '%s  %s  %s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]:-unknown model}"
+    printf '%s  %s  %s  (%s)\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]:-unknown model}" \
+      "$(disk_contents "${BASH_REMATCH[1]}")"
   done < <(lsblk -dnpPo NAME,TYPE,SIZE,MODEL)
 }
 
+# PYRE_KERNEL_PARAMS in the environment adds kernel parameters, for machines
+# that need one to boot (and for the VM tests' serial console).
 tui_collect() {
-  local disks choice
+  local disks choice swap_gib
   config_defaults
+  CFG[kernel_params]="${PYRE_KERNEL_PARAMS:-}"
   gum style --bold --foreground 208 "PyreOS installer"
 
   disks="$(candidate_disks)"
@@ -52,15 +64,20 @@ tui_collect() {
   if gum confirm --default=false "Log in automatically after the disk is unlocked?"; then
     CFG[autologin]=true
   fi
+  swap_gib=$(( ($(swap_mib) + 1023) / 1024 ))
+  if gum confirm --default=false "Enable hibernation? It adds a $swap_gib GiB swapfile, the size of this machine's memory."; then
+    CFG[hibernation]=true
+  fi
 }
 
 # The destructive-action confirmation names the exact disk (ADR 0006).
 tui_confirm() {
   local desc
-  desc="$(lsblk -dno SIZE,MODEL "${CFG[disk]}" | sed 's/  */ /g')"
+  desc="$(lsblk -dno SIZE,MODEL "${CFG[disk]}" | xargs)"
   gum style --border rounded --padding "0 1" --foreground 1 \
-    "This erases ALL data on ${CFG[disk]} (${desc})." \
-    "Hostname ${CFG[hostname]}, user ${CFG[username]}, ${CFG[timezone]}, ${CFG[locale]}, keymap ${CFG[keymap]}, autologin ${CFG[autologin]}."
+    "This erases ALL data on ${CFG[disk]} (${desc}, $(disk_contents "${CFG[disk]}"))." \
+    "Hostname ${CFG[hostname]}, user ${CFG[username]}, ${CFG[timezone]}, ${CFG[locale]}, keymap ${CFG[keymap]}," \
+    "autologin ${CFG[autologin]}, hibernation ${CFG[hibernation]}."
   [[ "$(gum input --prompt 'Type erase to continue: ')" == erase ]] || die "not confirmed; nothing was changed"
   CFG[erase_disk]=true
 }

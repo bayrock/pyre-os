@@ -12,6 +12,7 @@
 #   keymap = "us"              # default us
 #   kernel_params = ""         # extra kernel parameters, e.g. a serial console
 #   autologin = false          # log the user in after the disk is unlocked
+#   hibernation = false        # a swapfile as large as the memory, and resume
 #   pyre_repo = ""             # [pyre] server URL; default: pyre-release's mirrorlist
 #   finish = "none"            # none | reboot | poweroff
 #
@@ -19,7 +20,7 @@
 # else is rejected rather than guessed.
 
 declare -gA CFG=()
-readonly CONFIG_KEYS=" disk erase_disk username password luks_passphrase hostname timezone locale keymap kernel_params autologin pyre_repo finish "
+readonly CONFIG_KEYS=" disk erase_disk username password luks_passphrase hostname timezone locale keymap kernel_params autologin hibernation pyre_repo finish "
 
 config_defaults() {
   CFG=(
@@ -30,6 +31,7 @@ config_defaults() {
     [keymap]=us
     [kernel_params]=""
     [autologin]=false
+    [hibernation]=false
     [pyre_repo]=""
     [finish]=none
   )
@@ -76,7 +78,7 @@ config_check() {
     errors+=("locale must be a UTF-8 locale such as en_US.UTF-8")
   [[ "${CFG[keymap]}" =~ ^[A-Za-z0-9_.-]+$ ]] || errors+=("keymap is malformed")
   [[ "${CFG[kernel_params]}" =~ ^[A-Za-z0-9_.,:=/+\ -]*$ ]] || errors+=("kernel_params has unsupported characters")
-  for key in erase_disk autologin; do
+  for key in erase_disk autologin hibernation; do
     [[ "${CFG[$key]}" == true || "${CFG[$key]}" == false ]] || errors+=("$key must be true or false")
   done
   local re_url='^(https?|file)://[^[:space:]"'"'"'\\]+$'

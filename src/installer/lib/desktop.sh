@@ -74,6 +74,31 @@ seed_user_home() {
   info "user stubs and reconcile state for $user"
 }
 
+# keyring_file: a gnome-keyring keyring without a password (its plain format).
+keyring_file() {
+  printf '[keyring]\ndisplay-name=Default keyring\nctime=%s\nmtime=0\nlock-on-idle=false\nlock-after=false\n' "$(date +%s)"
+}
+
+# With autologin nobody types a password at login, so gnome-keyring can
+# neither unlock nor create a keyring from it, and the first app that stores a
+# secret gets a "choose a password for the new keyring" dialog. An autologin
+# install gets a default keyring without a password instead (ADR 0018): the
+# disk encryption protects it at rest, and it is all that stands before an
+# autologin session anyway.
+seed_autologin_keyring() {
+  local user="${CFG[username]}" dir
+  [[ "${CFG[autologin]}" == true ]] || return 0
+  dir="/home/$user/.local/share/keyrings"
+  # Written as the user from the inherited stdin: another user cannot reopen
+  # root's pipe through /dev/stdin.
+  in_target runuser -u "$user" -- install -d -m 700 "$dir"
+  # shellcheck disable=SC2016 # $1 belongs to the inner shell
+  keyring_file | in_target runuser -u "$user" -- sh -c 'umask 077 && cat >"$1"' sh "$dir/Default_keyring.keyring"
+  # shellcheck disable=SC2016
+  printf 'Default_keyring' | in_target runuser -u "$user" -- sh -c 'cat >"$1"' sh "$dir/default"
+  info "keyring: a default keyring without a password, for autologin"
+}
+
 # Hardware rules (pyre hw): their packages come from the live medium's
 # repositories through pacstrap, because the target's pacman.conf points at
 # network mirrors; then the rules write their drop-ins in the target.
@@ -94,4 +119,5 @@ desktop_setup() {
   write_greetd_pam
   hw_setup
   seed_user_home
+  seed_autologin_keyring
 }

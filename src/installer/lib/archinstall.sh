@@ -20,12 +20,23 @@ root_partition_mib() {
   printf '%d\n' $((disk_mib - 1 - ESP_MIB - 1))
 }
 
+# swap_mib: the size of the hibernation swapfile, the machine's memory in MiB
+# rounded up. The image is compressed and never larger than the memory.
+swap_mib() {
+  awk '/^MemTotal:/ { print int(($2 + 1023) / 1024) }' "${PYRE_MEMINFO:-/proc/meminfo}"
+}
+
 # archinstall_config DISK_BYTES SECTOR_BYTES ESP_ID ROOT_ID: print the config JSON.
 archinstall_config() {
-  local disk_bytes="$1" sector="$2" esp_id="$3" root_id="$4" root_mib
+  local disk_bytes="$1" sector="$2" esp_id="$3" root_id="$4" root_mib need_mib=16384 hibernation=false
   root_mib="$(root_partition_mib "$disk_bytes")"
-  (( root_mib >= 16384 )) || die "disk too small: need at least $((ESP_MIB + 16384 + 2)) MiB"
+  if [[ "${CFG[hibernation]}" == true ]]; then
+    hibernation=true
+    need_mib=$((need_mib + $(swap_mib)))
+  fi
+  (( root_mib >= need_mib )) || die "disk too small: need at least $((ESP_MIB + need_mib + 2)) MiB"
   jq -n \
+    --argjson hibernation "$hibernation" \
     --arg disk "${CFG[disk]}" --argjson ss "$sector" \
     --argjson esp_mib "$ESP_MIB" --argjson root_mib "$root_mib" --argjson iter "$LUKS_ITER_MS" \
     --arg esp_id "$esp_id" --arg root_id "$root_id" \
@@ -58,7 +69,7 @@ archinstall_config() {
                 {name: "@log", mountpoint: "/var/log"},
                 {name: "@pkg", mountpoint: "/var/cache/pacman/pkg"},
                 {name: "@snapshots", mountpoint: "/.snapshots"}
-              ]
+              ] + (if $hibernation then [{name: "@swap", mountpoint: "/swap"}] else [] end)
             }
           ]
         }],

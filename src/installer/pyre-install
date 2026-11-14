@@ -5,6 +5,7 @@
 # Usage: pyre-install                  interactive (gum)
 #        pyre-install --config FILE    unattended; FILE must set erase_disk = true
 #        pyre-install --print-config FILE   show the archinstall JSON, change nothing
+# An interactive run adds the kernel parameters in PYRE_KERNEL_PARAMS, if set.
 set -euo pipefail
 
 here="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
@@ -19,7 +20,7 @@ readonly OFFLINE_REPO=/opt/pyre-offline
 readonly RUN_DIR=/run/pyre-install
 
 usage() {
-  sed -n '2,7s/^# //p' "${BASH_SOURCE[0]}"
+  sed -n '2,8s/^# //p' "${BASH_SOURCE[0]}"
 }
 
 # The whole disk holding the live medium, never an install target.

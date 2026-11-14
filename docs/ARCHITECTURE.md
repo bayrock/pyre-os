@@ -97,17 +97,19 @@ Each include mechanism is verified for real in P3 before it is relied on.
 
 `pyre-install` is a thin gum TUI.
 
-**It asks for:** target disk, LUKS passphrase, user and password, hostname, timezone and locale (autodetected and confirmable), optional bundles, autologin, and hibernation.
+**It asks for:** the target disk (the list shows what each disk holds now), hostname, user and password, the LUKS passphrase, timezone, locale and keyboard layout, autologin, and hibernation. Optional bundles are still to come.
 
 **It generates an archinstall JSON config** and runs archinstall with `--skip-boot`. Arch-maintained code does the disk, LUKS2, btrfs, subvolume, and base-system work.
 
 **It then owns the boot stack** in the chroot (ADR 0011):
 
 1. the systemd initramfs `HOOKS`
-2. `/etc/default/limine` and the `rd.luks` command line
-3. the snapper configs
-4. installing `limine-mkinitcpio-hook`, `limine-snapper-sync` and `snap-pac`
-5. `limine-install` and `limine-update`
+2. the hibernation swapfile, when chosen (ADR 0017)
+3. `/etc/default/limine` and the `rd.luks` command line
+4. the snapper configs
+5. installing `limine-mkinitcpio-hook`, `limine-snapper-sync` and `snap-pac`
+6. `limine-install` and `limine-update`
+7. a "Windows" boot entry when another disk holds Windows (ADR 0017)
 
 **It finishes in the chroot** by running `pyre hw apply` and `pyre reconcile --system`. It then reboots into the greeter.
 
@@ -117,11 +119,11 @@ Each include mechanism is verified for real in P3 before it is relied on.
 
 - GPT. A 2 GiB FAT32 ESP is mounted at `/boot`.
 - LUKS2 holds btrfs with subvolumes `@`, `@home`, `@log`, `@pkg`, `@snapshots`, plus nested cache subvolumes. Mount options are `compress=zstd:3,noatime`.
-- Swap is zram. A swapfile is created only when hibernation is chosen.
+- Swap is zram. Only when hibernation is chosen (ADR 0017), a swapfile as large as the memory lives in its own `@swap` subvolume, outside every snapshot, and the kernel command line carries `resume=` and `resume_offset=`. `pyre doctor` checks that the offset is still the swapfile's.
 - The initramfs uses systemd hooks with `sd-encrypt`, which makes TPM2/FIDO2 unlock possible later. Plymouth is themed.
 - Limine is the bootloader. `limine-entry-tool` (`limine-mkinitcpio-hook`) generates the boot entries, and `limine-snapper-sync` adds the snapshot entries. Read-only snapshots boot with `sd-btrfs-overlayfs`. There is no UKI for now (ADR 0011).
 - Kernels are `linux` plus `linux-lts` as a fallback entry.
-- Dual-boot: an existing Windows ESP on another disk is detected and gets a Limine chainload entry.
+- Dual-boot (ADR 0017): Windows on another disk gets a "Windows" entry below PyreOS that chainloads its boot manager. The other disk is only read.
 
 ### Session
 
@@ -243,6 +245,7 @@ Generated ISOs, packages, VM disks, keys, and secrets go only under the ignored 
 2. `sudo tools/build-iso` runs `mkarchiso` on `iso/` with the local repo injected and writes to `build/out/`.
 3. `tools/run-vm <iso>` boots it with QEMU/KVM and UEFI (OVMF), or BIOS with `--bios`. It uses disposable qcow2 disks under `build/vm/`, a serial log, and a monitor socket for screendumps.
 4. `tools/test-iso` boot-checks an ISO under UEFI and BIOS, covering the serial login, identity, and keyring.
-5. `tools/test-e2e <scenario>` runs an unattended install, then boot, then assertions over the serial console and screenshots. *(P2)*
+5. `tools/test-e2e` runs an unattended install, then boot, then assertions over the serial console and screenshots.
+6. `tools/test-machine` drives the interactive installer by keyboard next to a stand-in Windows disk, then checks hibernation, the Windows entry, three outputs and suspend (P6).
 
 CI runs the same scripts.
