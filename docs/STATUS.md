@@ -4,18 +4,18 @@ Last updated: 2026-11-13
 
 ## Current phase
 
-**Between P4 and P5.** P4 was accepted on 2026-11-13. Next: the hosted testing channel (CI publishing with a release signing subkey), then P5, polish and identity.
+**Between P4 and P5.** P4 was accepted on 2026-11-13, and the hosted testing channel went live the same day. Next: P5, polish and identity.
 
 **Carried over** (later phases unless reprioritized):
 
 - **Website (P5, started early):** the landing page lives in `landing/`, and the `pages` workflow publishes it to <https://bayrock.github.io/pyre-os/>. It went live on 2026-11-13 and serves `landing/site/` byte for byte. It was checked locally at 360, 768 and 1280 px in headless Chromium.
 - **Untested paths:** the interactive gum TUI (only `--config` has run), and real hardware (only QEMU with OVMF), including Bluetooth adapters (P6).
 - **Not built yet:** the hibernation swapfile option; Windows chainload detection (`FIND_BOOTLOADERS=yes` untested); Plymouth theming (P5); `pyre hw apply` and `pyre reconcile --system` (P4).
-- **Repository:** the installed system has no `[pyre]` repository, so PyreOS packages do not update after install until P4 hosting, and `[pyre]` packages are unsigned until P4.
+- **Repository:** the `testing` channel is live (below). There is no `stable` channel or promotion script yet (P7), and installs from ISOs built before `pyre-release` 0.3.0 have no `[pyre]` server.
 - **Sizes:** the ESP is 2 GiB, while limine-snapper-sync recommends 4 GiB (entries are pruned at 85% usage). The ISO is now 3.0 GB, 1.4 GB of it the offline repo.
 - **limine-snapper-sync 1.32.1 rough edges** (worth reporting upstream): each prompt wraps stdin in a new buffered reader and spins on EOF; it calls `stty` on `/dev/tty`, so it stops outside the foreground process group; it writes the backup's `info.xml` without fsync, so a power cut right after a restore leaves an orphaned backup.
 - **From P3:** users created after install get bash's own `.bashrc` (P4 user reconcile, ADR 0013); with autologin the keyring stays locked until first use.
-- **From P4:** `pyre hw` has run only against a simulated sysfs, so real GPUs wait for P6. The `-gaming` and `-lazyvim` bundles are deferred. `[pyre]` is not hosted yet: CI publishing needs a release signing subkey from the user.
+- **From P4:** `pyre hw` has run only against a simulated sysfs, so real GPUs wait for P6. The `-gaming` and `-lazyvim` bundles are deferred. `[pyre]` is hosted on the `testing` channel since 2026-11-13.
 
 ## Accepted phases
 
@@ -77,6 +77,8 @@ Last updated: 2026-11-13
   The first ISO, built before `[pyre]`, failed the identity checks, which confirms the test can fail.
 - **CI:** `.github/workflows/check.yml` runs two jobs in `archlinux:latest`. The `check` job runs `tools/check`, and the `packages` job runs `tools/build-pkgs` and namcap. Both were green on the push of 2026-11-08, as reported by the user from the Actions tab.
 - **Development key:** fingerprint `E150852868B407FB17F1149AE59B1D8F2343FD47`, UID "PyreOS Development Key (NOT FOR RELEASE)". The private key exists only in `build/keys/gnupg/` on the development machine.
+- **Testing channel** (2026-11-13): the `publish` job in `check.yml` runs `tools/publish-testing` on every push to `main`, into the GitHub Release `testing` (`Server = https://github.com/bayrock/pyre-os/releases/download/testing`). The first run published 11 packages. A sandboxed pacman trusting only `pyre-keyring` 0.2.0 synced and verified all of them, and a client trusting only the dev key was refused. `tools/test-channel` (VM) result: see below.
+- **Fixed on the way:** a restored snap-pac "pre" snapshot carries `/var/lib/pacman/db.lck`, so pacman stayed locked after `pyre rollback`. `pyre-base` 0.3.1 clears it at boot with a tmpfiles rule.
 - **Release key** (2026-11-13, `docs/reference/release-key.md`): primary `65D123DD9A18A346A94C38E6228693F6D58F0A7F`, certify-only, kept offline. Signing subkey `279066B8C9E6FD17B3B9189C588DC5476F4A31E4`, expiring 2028-11-12, held in the Actions secret `PYRE_SIGNING_SUBKEY`. `pyre-keyring` 0.2.0 trusts it alongside the dev key.
 - **Known gaps:**
   - Local package builds use plain `makepkg --nodeps`, because `devtools` is not installed.
@@ -125,5 +127,4 @@ Last updated: 2026-11-13
 
 Each question is listed under the phase that resolves it.
 
-- **Testing channel:** the release key and CI secret exist. Next is the CI job that publishes signed packages to the `testing` release.
 - **P7:** whether the "PyreOS" trademark and domains are available.

@@ -1,11 +1,13 @@
 # Handoff
 
-## Next task: the hosted testing channel, then P5
+## Next task: P5, or install images on the testing channel first
 
 1. **The release key: done on 2026-11-13** (`docs/reference/release-key.md`). The primary key is offline, the subkey is in the Actions secret `PYRE_SIGNING_SUBKEY`, and `pyre-keyring` 0.2.0 trusts it alongside the dev key. Release images drop the dev key in P7.
-2. **CI publishing:** on pushes to `main`, build every package, sign it and the database with the subkey, and upload them to a GitHub Release named `testing`. Then `pyre-release`'s mirrorlist points at `https://github.com/bayrock/pyre-os/releases/download/testing`. Verify a VM can `pyre update` from it.
-3. **P5 (ROADMAP):** `palette.toml`, matugen templates, `pyre theme`, the "Ember" theme, and branding (Limine, Plymouth, the greeter, wallpapers, and the boot splash, which is still Arch artwork).
-4. **Landing page:** live at <https://bayrock.github.io/pyre-os/> (Pages source: GitHub Actions). When a testing release exists, add the "Install" pill (`landing/README.md`).
+2. **The testing channel: live on 2026-11-13** (`docs/BUILDING.md`, "The testing channel"). Every push to `main` publishes signed packages to the `testing` release, and `pyre-release` 0.3.0 points installed systems at it. **Any package change needs a `pkgver`/`pkgrel` bump**, or the publish job fails. `tools/test-channel` checks that an installed VM updates from it.
+3. **Pending ISO rebuild (user, `sudo tools/build-iso`):** the next full `tools/test-e2e` runs the new `pacman-unlocked` check in its rolled-back stage, which needs `pyre-base` 0.3.1 in the ISO's offline repository.
+4. **Optional before P5: install images.** Publishing the ISO to the `testing` release (CI needs a privileged container for mkarchiso, and the 3.7 GB image is over GitHub's 2 GiB per-asset limit, so it must be split or slimmed) would unlock the landing page's "Install" pill. The pill waits for install images, not packages (`landing/README.md`).
+5. **P5 (ROADMAP):** `palette.toml`, matugen templates, `pyre theme`, the "Ember" theme, and branding (Limine, Plymouth, the greeter, wallpapers, and the boot splash, which is still Arch artwork).
+6. **Landing page:** live at <https://bayrock.github.io/pyre-os/> (Pages source: GitHub Actions).
 
 ## Dev loop reference
 
