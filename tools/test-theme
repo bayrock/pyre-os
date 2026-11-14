@@ -2,13 +2,13 @@
 # shellcheck disable=SC2016 # probes are typed into the guest verbatim
 # The theme system on an installed desktop (ADR 0015), headless under UEFI:
 # boots a throwaway overlay of an installed test disk (default build/vm/test-e2e),
-# installs the newest local pyre-themes, pyre-desktop and pyre-cli onto its
-# existing user, logs in through the greeter, and checks that Ember reaches
-# Noctalia and every themed app, that a live switch to another palette
-# recolors them, and that pyre theme set brings Ember back. The base disk is
-# never written.
+# installs the newest local pyre-base, pyre-themes, pyre-desktop and pyre-cli
+# onto its existing user, checks the Limine boot menu's PyreOS look, logs in
+# through the greeter, and checks that Ember reaches Noctalia and every themed
+# app, that a live switch to another palette recolors open windows, and that
+# pyre theme set brings Ember back. The base disk is never written.
 # Usage: tools/test-theme [--base NAME]
-# Evidence: build/vm/test-theme/share/desktop-*.png
+# Evidence: build/vm/test-theme/share/desktop-*.png and limine-menu.png
 set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -34,7 +34,7 @@ fi
 shopt -s nullglob
 rm -rf -- "$vm_dir"
 mkdir -p -- "$vm_dir/share/pkgs"
-for pkg in pyre-themes pyre-desktop pyre-cli; do
+for pkg in pyre-base pyre-themes pyre-desktop pyre-cli; do
   files=("$repo_root"/build/repo/"$pkg"-[0-9]*.pkg.tar.zst)
   (( ${#files[@]} )) || { echo "$tool: no $pkg in build/repo; run tools/build-pkgs" >&2; exit 1; }
   cp -- "${files[-1]}" "$vm_dir/share/pkgs/"
@@ -69,10 +69,22 @@ expect share 'mkdir -p /mnt/share && mount -t 9p -o trans=virtio pyre-share /mnt
 # Arch packages (adw-gtk-theme) come from the network, [pyre] from the testing channel.
 expect install 'printf "Server = https://github.com/bayrock/pyre-os/releases/download/testing\n" > /etc/pacman.d/pyre-mirrorlist; pacman -Sy >/dev/null 2>&1; pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-theme-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-theme-install.log' '^rc=0$'
 expect installed 'pacman -Q pyre-themes adw-gtk-theme | wc -l' '^2$'
+# pyre-base's hook put the PyreOS block at the top of limine.conf, and the
+# entries limine-entry-tool wrote are all still there.
+expect limine-block 'head -n 1 /boot/limine.conf; grep -c "^interface_branding: PyreOS$" /boot/limine.conf; test -s /boot/pyre/wallpaper.jpg && echo wallpaper' '^# >>> PyreOS boot menu$'
+expect limine-entries 'limine-update >/dev/null 2>&1; echo rc=$?; grep -c "^# >>> PyreOS boot menu$" /boot/limine.conf; grep -c "^ */" /boot/limine.conf' '^rc=0$'
+expect limine-block-kept 'grep -c "^# >>> PyreOS boot menu$" /boot/limine.conf' '^1$'
 power_off
 
-# --- 2. log in, and Ember is the theme ---------------------------------------------
+# --- 2. the boot menu, then log in, and Ember is the theme ------------------------
 start_vm session --boot-disk
+# Limine waits five seconds: catch its menu. Limine's own look is black; the
+# PyreOS look is the night wallpaper.
+sleep 3
+"$repo_root/tools/vm-ctl" --name "$name" screendump "$share/limine-menu.png" >/dev/null
+lit="$(magick "$share/limine-menu.png" -crop 1280x200+0+600 +repage -format '%[fx:mean]' info:)"
+awk -v m="$lit" 'BEGIN { exit !(m > 0.08) }' || die "the Limine menu shows no wallpaper (mean $lit)"
+pass "limine-menu: wallpaper shown (lower band mean $lit)"
 unlock_and_login
 greeter_login
 expect login-reconcile 'for _ in $(seq 30); do r=$(u systemctl --user show pyre-reconcile.service -p Result --value); [ -n "$r" ] && [ "$(u systemctl --user is-active pyre-reconcile.service)" != activating ] && break; sleep 1; done; echo "$r"' '^success$'

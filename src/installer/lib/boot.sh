@@ -93,6 +93,9 @@ install_boot_stack() {
   in_target systemctl disable snapper-timeline.timer
   [[ -f "$TARGET/boot/limine.conf" ]] || die "Limine did not write /boot/limine.conf"
   info "Limine entries: $(grep -c '^ */' "$TARGET/boot/limine.conf") lines"
+  # pyre-base's hook ran before limine.conf existed; brand the menu now (ADR 0015).
+  in_target /usr/lib/pyre/boot-branding >/dev/null
+  info "boot menu: PyreOS look"
 }
 
 finish_target() {

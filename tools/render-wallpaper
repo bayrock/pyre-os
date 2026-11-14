@@ -9,7 +9,9 @@ mid-rise. The scene sits low and slightly right of centre, so a crop to any
 monitor shape (Noctalia's default fill mode) keeps the cabin.
 
 Writes themes/ember/wallpapers/ember.svg (the source) and, with rsvg-convert
-and ImageMagick, ember.jpg at 3840x2160 with a fine grain against banding.
+and ImageMagick, ember.jpg at 3840x2160 with a fine grain against banding,
+plus the boot menu's 1920x1080 copy for Limine,
+packages/pyre-base/limine-wallpaper.jpg.
 
 Usage: tools/render-wallpaper [--svg-only | --print-svg]
   --print-svg   print the SVG only (tools/check compares it with ember.svg)
@@ -25,6 +27,7 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SITE = ROOT / "landing" / "site"
 OUT = ROOT / "themes" / "ember" / "wallpapers"
+BOOT = ROOT / "packages" / "pyre-base" / "limine-wallpaper.jpg"
 W, H = 3840, 2160
 
 
@@ -155,7 +158,11 @@ def main(argv):
         # A fine grain hides the 8-bit banding of the dark sky gradient.
         subprocess.run(["magick", str(png), "-seed", "58", "-attenuate", "0.2", "+noise", "Gaussian",
                         "-strip", "-sampling-factor", "4:4:4", "-quality", "88", str(OUT / "ember.jpg")], check=True)
-    print(f"wrote {source.relative_to(ROOT)} and {(OUT / 'ember.jpg').relative_to(ROOT)}")
+        # Limine decodes this itself at boot: half the size, baseline JPEG.
+        subprocess.run(["magick", str(png), "-resize", "1920x1080", "-seed", "58", "-attenuate", "0.2",
+                        "+noise", "Gaussian", "-strip", "-interlace", "none", "-sampling-factor", "4:2:0",
+                        "-quality", "85", str(BOOT)], check=True)
+    print(f"wrote {source.relative_to(ROOT)}, {(OUT / 'ember.jpg').relative_to(ROOT)} and {BOOT.relative_to(ROOT)}")
     return 0
 
 

@@ -1,0 +1,11 @@
+# Re-apply the PyreOS boot menu block when pyre-base changes (ADR 0015).
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = pyre-base
+
+[Action]
+Description = Updating the PyreOS boot menu look...
+When = PostTransaction
+Exec = /usr/lib/pyre/boot-branding

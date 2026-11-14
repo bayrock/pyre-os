@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Keep the PyreOS look in Limine's boot menu (ADR 0015): a marked block at
+# the top of limine.conf, and the wallpaper on the ESP. The block is replaced
+# on every pyre-base update; the rest of the file belongs to limine-entry-tool
+# and the admin. A line "# pyre-boot-branding: off" in limine.conf opts out.
+# PYRE_ROOT prefixes every path, for tests.
+set -euo pipefail
+
+root="${PYRE_ROOT:-}"
+share="$root/usr/share/pyre/boot"
+begin='# >>> PyreOS boot menu'
+end='# <<< PyreOS boot menu'
+
+esp="$(sed -n 's/^ESP_PATH="\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' "$root/etc/default/limine" 2>/dev/null | tail -n 1)"
+esp="$root${esp:-/boot}"
+conf="$esp/limine.conf"
+
+if [[ ! -f "$conf" ]]; then
+  echo "pyre-boot-branding: no $conf yet; the installer brands it after limine-update"
+  exit 0
+fi
+if grep -qx '# pyre-boot-branding: off' "$conf"; then
+  exit 0
+fi
+
+install -Dm644 -- "$share/limine-wallpaper.jpg" "$esp/pyre/wallpaper.jpg"
+tmp="$(mktemp -- "$conf.pyre.XXXXXX")"
+trap 'rm -f -- "$tmp"' EXIT
+{
+  cat -- "$share/limine-branding.conf"
+  awk -v b="$begin" -v e="$end" '$0 == b { skip = 1; next } skip && $0 == e { skip = 0; next } !skip' "$conf"
+} >"$tmp"
+if cmp -s -- "$tmp" "$conf"; then
+  exit 0
+fi
+cat -- "$tmp" >"$conf"
+sync -- "$conf" 2>/dev/null || true
+echo "pyre-boot-branding: updated $conf"
+
+# An enrolled config is checked against a hash in the Limine binary: re-enroll
+# only when the admin turned enrollment on (limine-enroll-config also
+# restores and signs the binary, so it is not run otherwise).
+if grep -qsx 'ENABLE_ENROLL_LIMINE_CONFIG="\{0,1\}yes"\{0,1\}' \
+    "$root/etc/default/limine" "$root/etc/limine-entry-tool.conf" "$root"/etc/limine-entry-tool.d/*.conf &&
+  [[ -z "$root" ]] && command -v limine-enroll-config >/dev/null 2>&1; then
+  limine-enroll-config
+fi

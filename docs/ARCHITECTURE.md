@@ -173,7 +173,8 @@ The installer will offer bundles once the TUI is exercised.
   2. Noctalia's defaults select Ember, and Noctalia renders the palette into the apps through its built-in templates, live, on every change.
   3. `pyre theme set <name>` switches through `noctalia msg color-scheme-set custom <name>`, and sets the theme's wallpaper.
   4. On every palette change, Noctalia's `pyre-live` user template runs `pyre theme refresh`, which recolors open foot terminals (OSC sequences) and open GTK windows (a color-scheme nudge).
-- **Coverage:** Noctalia, the greeter (Noctalia's appearance sync), niri, foot, GTK 3/4 (with `adw-gtk-theme`) and btop. Qt follows when a default app uses it. Limine and Plymouth come later, through a root-owned step that reads the active `palette.json`.
+- **Coverage:** Noctalia, the greeter (Noctalia's appearance sync), niri, foot, GTK 3/4 (with `adw-gtk-theme`) and btop. Qt follows when a default app uses it.
+- **Boot surfaces wear Ember for every user** (ADR 0015). `pyre-base` keeps a marked PyreOS block at the top of `/boot/limine.conf`, with the branding, Ember's colors and the wallpaper copied to `/boot/pyre/`. Its pacman hook applies it, and so does `pyre-install`.
 - **Shipped themes:** "Ember" is the default, plus a small curated set built from palettes whose licenses have been checked. No third-party theme artwork is copied.
 
 ### CLI (`src/cli/`, package `pyre-cli`)

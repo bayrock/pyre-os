@@ -41,7 +41,11 @@ ADR 0005 already requires that "the theme system must drive Noctalia's palette, 
   - `tools/ember-palette` derives `palette.json` from those OKLCH values, and `tools/check` keeps the two in sync
   - its wallpaper is the landing page's cabin at night, generated from the site's own woods SVG and color tokens by `tools/render-wallpaper`. It is CC BY-SA 4.0 like all PyreOS artwork, and `tools/check` keeps its SVG in sync with the site
 - **matugen is not used.** Noctalia's engine replaces it.
-- **Parts Noctalia cannot reach,** Limine and Plymouth at boot, will take their colors from the active theme's `palette.json` through a separate, root-owned step. That comes later in P5.
+- **Boot surfaces wear Ember, whatever the user's theme.** The boot menu, the splash and the ISO belong to the machine, which can have several users with different themes, so they carry the distribution's identity, not one user's choice.
+  - **Limine:** `pyre-base` keeps a marked block at the top of `limine.conf` (Limine reads global options anywhere in the file, and `limine-entry-tool` keeps foreign lines). The block sets the PyreOS branding, Ember's colors, and a 1920×1080 copy of the wallpaper on the ESP, `/pyre/wallpaper.jpg`.
+  - The block is applied by a pacman hook on every `pyre-base` change, and by `pyre-install` right after `limine-update`.
+  - A line `# pyre-boot-branding: off` opts out. An enrolled config (Secure Boot) is re-enrolled only when the admin turned enrollment on.
+  - Plymouth and the ISO's menus follow the same rule.
 
 ## Consequences
 

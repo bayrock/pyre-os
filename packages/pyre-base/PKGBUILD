@@ -2,7 +2,7 @@
 # Meta-package for every PyreOS system (ADR 0008, ADR 0012). Kernels and the
 # Limine boot stack are installed by pyre-install, not forced here.
 pkgname=pyre-base
-pkgver=0.3.1
+pkgver=0.4.0
 pkgrel=1
 pkgdesc='PyreOS base system (meta-package)'
 arch=(any)
@@ -20,13 +20,24 @@ depends=(
   sudo
   zram-generator
 )
-source=(zram-generator.conf pacman-lock.conf)
+source=(zram-generator.conf pacman-lock.conf
+        limine-branding.conf limine-wallpaper.jpg pyre-boot-branding pyre-boot-branding.hook)
 sha256sums=('33ec83a5d7a378bfb77b105ed174bb23eb12c16478d8009b32702fbad7978af4'
-            '32af1349f5699750e25300fc6836092bc6885be21fdf169d7b29b2454eec2ee5')
+            '32af1349f5699750e25300fc6836092bc6885be21fdf169d7b29b2454eec2ee5'
+            'ed3e3d06940ed33dc096e515e75c68d82c68c6d2c691592982246f9d758c768d'
+            'cebafb1b9c649719a8c7293fa188397332676ebeff15b816c39c6ed940bf33ab'
+            'd4c269b2bff1ef821ff0d96b8a9e76a6177fd51645336e1f837ba72ff15bef6a'
+            'cfdb349d044236cc449b1721bc11494aba8c4c854b2e62141e6a174b0dbab8a8')
 
 package() {
   # A vendor drop-in; /etc/systemd/zram-generator.conf stays the admin's.
   install -Dm644 zram-generator.conf "$pkgdir/usr/lib/systemd/zram-generator.conf.d/50-pyre.conf"
   # Clears the stale pacman lock a restored or booted snapshot carries.
   install -Dm644 pacman-lock.conf "$pkgdir/usr/lib/tmpfiles.d/pyre-pacman-lock.conf"
+  # The PyreOS boot menu look (ADR 0015): a block in limine.conf and the
+  # wallpaper on the ESP, applied by the hook and by pyre-install.
+  install -Dm644 limine-branding.conf "$pkgdir/usr/share/pyre/boot/limine-branding.conf"
+  install -Dm644 limine-wallpaper.jpg "$pkgdir/usr/share/pyre/boot/limine-wallpaper.jpg"
+  install -Dm755 pyre-boot-branding "$pkgdir/usr/lib/pyre/boot-branding"
+  install -Dm644 pyre-boot-branding.hook "$pkgdir/usr/share/libalpm/hooks/pyre-boot-branding.hook"
 }
