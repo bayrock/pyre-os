@@ -2,6 +2,10 @@
 
 ## Next task: P5, polish and identity (in progress)
 
+**P5 is built and in review (2026-11-14).** Every P5 item is done: four themes (Ember, Birch, Evergreen, Frost), boot branding, the welcome panel (ADR 0016) and the user guide (`docs/guide/`). `tools/test-theme` and `tools/test-visual` pass (see STATUS). To accept P5:
+- The user reviews the captures in `build/vm/test-visual/share/` and signs off.
+- The user rebuilds the ISO (`sudo tools/build-iso`), then `tools/test-iso` and `tools/test-e2e` run. `test-e2e` now closes the welcome panel at the first login before its desktop checks.
+
 1. **The release key: done on 2026-11-13** (`docs/reference/release-key.md`). The primary key is offline, the subkey is in the Actions secret `PYRE_SIGNING_SUBKEY`, and `pyre-keyring` 0.2.0 trusts it alongside the dev key. Release images drop the dev key in P7.
 2. **The testing channel: live on 2026-11-13** (`docs/BUILDING.md`, "The testing channel"). Every push to `main` publishes signed packages to the `testing` release, and `pyre-release` 0.3.0 points installed systems at it. **Any package change needs a `pkgver`/`pkgrel` bump**, or the publish job fails. `tools/test-channel` checks that an installed VM updates from it.
 3. **P5 theme system: started on 2026-11-13** (ADR 0015). A theme is a Noctalia palette in `themes/<id>/`, shipped by `pyre-themes`. Ember comes from the landing page. Noctalia's built-in templates color niri, foot, GTK 3/4 and btop, and `pyre theme` lists and sets themes. `tools/test-theme` (VM) passes. Next in P5:

@@ -19,6 +19,7 @@ It starts as the primary author's daily driver and is built to the standard of a
 | Storage/boot | LUKS2 + btrfs, Limine, snapper (root and home), systemd initramfs | [0008](decisions/0008-storage-and-boot.md) |
 | Packages | Signed `[pyre]` repo after Arch's repos, CI-built | [0009](decisions/0009-package-repository.md) |
 | Themes | A theme is a Noctalia palette; Noctalia's templates color the apps | [0015](decisions/0015-theme-system.md) |
+| Welcome | A Noctalia plugin panel, "Welcome home", with the user guide in place | [0016](decisions/0016-welcome-panel.md) |
 
 ## Priorities
 

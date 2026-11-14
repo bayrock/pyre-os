@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2016 # probes are typed into the guest verbatim
-# The theme system on an installed desktop (ADR 0015), headless under UEFI:
+# The theme system (ADR 0015) and the welcome panel (ADR 0016) on an
+# installed desktop, headless under UEFI:
 # boots a throwaway overlay of an installed test disk (default build/vm/test-e2e),
 # installs the newest local pyre-base, pyre-themes, pyre-desktop and pyre-cli
 # onto its existing user, checks the Limine boot menu's PyreOS look, logs in
 # through the greeter, and checks that Ember reaches Noctalia and every themed
 # app, that a live switch to another palette recolors open windows, and that
-# pyre theme set brings Ember back. The base disk is never written.
+# pyre theme set brings Ember back. The welcome panel opens by itself at that
+# first login, switches the theme from its buttons and shows the guide, and
+# every other theme reaches the open windows. The base disk is never written.
 # Usage: tools/test-theme [--base NAME]
 # Evidence: build/vm/test-theme/share/desktop-*.png and limine-menu.png
 set -euo pipefail
@@ -17,7 +20,7 @@ name=test-theme
 base_name=test-e2e
 case "${1:-}" in
   --base) base_name="${2:?--base needs a VM name}" ;;
-  -h|--help) sed -n '3,11s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
+  -h|--help) sed -n '3,14s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
   "") ;;
   *) echo "$tool: unknown argument: $1" >&2; exit 2 ;;
 esac
@@ -42,6 +45,14 @@ for pkg in pyre-base pyre-themes pyre-desktop pyre-cli; do
 done
 qemu-img create -q -f qcow2 -b "$base/disk.qcow2" -F qcow2 "$vm_dir/disk.qcow2"
 cp -- "$base/OVMF_VARS.4m.fd" "$vm_dir/"
+
+layout=1280x800   # one output (vm-ctl click)
+
+# palette_color THEME VARIANT ROLE: a color from a shipped palette.
+palette_color() {
+  python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]][sys.argv[3]])' \
+    "$repo_root/themes/$1/palette.json" "$2" "$3"
+}
 
 ember_primary="$(sed -n 's/^ *"primary": "\(#[0-9a-f]*\)",$/\1/p' "$repo_root/themes/ember/palette.json" | head -n 1)"
 ember_surface="$(sed -n 's/^ *"surface": "\(#[0-9a-f]*\)",$/\1/p' "$repo_root/themes/ember/palette.json" | head -n 1)"
@@ -89,6 +100,18 @@ awk -v m="$lit" 'BEGIN { exit !(m > 0.08) }' || die "the Limine menu shows no wa
 pass "limine-menu: wallpaper shown (lower band mean $lit)"
 unlock_and_login
 greeter_login
+
+# The welcome panel opens by itself at the first login after the upgrade
+# (niri runs pyre welcome --first-login), from PyreOS's plugin source.
+expect welcome-shown 'for _ in $(seq 60); do test -e /home/'"$user"'/.local/state/pyre/welcome/shown && break; sleep 1; done; test -e /home/'"$user"'/.local/state/pyre/welcome/shown && echo shown' '^shown$'
+expect welcome-plugin 'u noctalia msg plugins list 2>&1 | grep -c "pyre/welcome"' '^[1-9]'
+sleep 3
+shot welcome
+expect welcome-guide 'u pyre welcome guide; echo rc=$?' '^rc=0$'
+sleep 2
+shot welcome-guide
+expect welcome-close 'u noctalia msg panel-close pyre/welcome:welcome; echo rc=$?' '^rc=0$'
+sleep 1
 expect login-reconcile 'for _ in $(seq 30); do r=$(u systemctl --user show pyre-reconcile.service -p Result --value); [ -n "$r" ] && [ "$(u systemctl --user is-active pyre-reconcile.service)" != activating ] && break; sleep 1; done; echo "$r"' '^success$'
 expect palette-linked 'readlink /home/'"$user"'/.config/noctalia/palettes/Ember.json' '^/usr/share/pyre/themes/ember/palette\.json$'
 # The login reconcile links the palette alongside Noctalia's start; pyre theme set
@@ -136,6 +159,27 @@ expect niri-ember-again 'grep -c "'"$ember_primary"'" '"$home"'/niri/noctalia.kd
 shot theme-ember-again
 pixel_is theme-ember-again 300 400 "$ember_surface"
 pixel_is theme-ember-again 950 620 "$ember_surface"
+
+# --- 4. the welcome panel's theme buttons, and every theme on the open windows ---
+expect welcome-again 'u pyre welcome; echo rc=$?' '^rc=0$'
+sleep 3
+shot welcome-ember
+click 380 514   # the Birch button, second in "Choose your light"
+expect welcome-birch 'for _ in $(seq 10); do [ "$(u noctalia msg color-scheme-get)" = "custom Birch" ] && break; sleep 1; done; u noctalia msg color-scheme-get' '^custom Birch$'
+sleep 2
+shot welcome-birch
+expect welcome-close-2 'u noctalia msg panel-close pyre/welcome:welcome; echo rc=$?' '^rc=0$'
+for theme in birch evergreen frost ember; do
+  variant=dark
+  [[ "$theme" == birch ]] && variant=light
+  surface="$(palette_color "$theme" "$variant" surface)"
+  expect "set-$theme" "u pyre theme set $theme >/dev/null; sleep 3; u pyre theme current" "^$theme\$"
+  expect "wallpaper-$theme" 'u noctalia msg wallpaper-get' "themes/$theme/wallpapers/$theme\\.jpg"
+  expect "gtk-$theme" 'u gsettings get org.gnome.desktop.interface color-scheme' "prefer-$variant"
+  shot "theme-$theme-all"
+  pixel_is "theme-$theme-all" 300 400 "$surface"
+  pixel_is "theme-$theme-all" 950 620 "$surface"
+done
 probe evidence 'cp /var/log/test-theme-install.log /mnt/share/ 2>/dev/null; true' >/dev/null
 power_off
 printf '%s: PASS (screenshots in %s)\n' "$tool" "$vm_dir/share"

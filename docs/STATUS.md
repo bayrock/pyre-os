@@ -1,16 +1,16 @@
 # Status
 
-Last updated: 2026-11-13
+Last updated: 2026-11-14
 
 ## Current phase
 
-**P5, polish and identity (in progress).** P4 was accepted on 2026-11-13, and the hosted testing channel went live the same day. P5 started the same evening with the theme system (ADR 0015).
+**P5, polish and identity (in progress).** P4 was accepted on 2026-11-13, and the hosted testing channel went live the same day. P5 started the same evening with the theme system (ADR 0015). By 2026-11-14 every P5 item is built: four themes, boot branding, the welcome panel (ADR 0016) and the user guide. What remains is the exit review (`tools/test-visual`, signed off by the user) and an ISO rebuild.
 
 **Carried over** (later phases unless reprioritized):
 
 - **Website (P5, started early):** the landing page lives in `landing/`, and the `pages` workflow publishes it to <https://bayrock.github.io/pyre-os/>. It went live on 2026-11-13 and serves `landing/site/` byte for byte. It was checked locally at 360, 768 and 1280 px in headless Chromium.
 - **Untested paths:** the interactive gum TUI (only `--config` has run), and real hardware (only QEMU with OVMF), including Bluetooth adapters (P6).
-- **Not built yet:** the hibernation swapfile option; Windows chainload detection (`FIND_BOOTLOADERS=yes` untested); Plymouth theming (P5); `pyre hw apply` and `pyre reconcile --system` (P4).
+- **Not built yet:** the hibernation swapfile option; Windows chainload detection (`FIND_BOOTLOADERS=yes` untested); `pyre hw apply` and `pyre reconcile --system` (P4).
 - **Repository:** the `testing` channel is live (below). There is no `stable` channel or promotion script yet (P7), and installs from ISOs built before `pyre-release` 0.3.0 have no `[pyre]` server.
 - **Sizes:** the ESP is 2 GiB, while limine-snapper-sync recommends 4 GiB (entries are pruned at 85% usage). The ISO is now 3.0 GB, 1.4 GB of it the offline repo.
 - **limine-snapper-sync 1.32.1 rough edges** (worth reporting upstream): each prompt wraps stdin in a new buffered reader and spins on EOF; it calls `stty` on `/dev/tty`, so it stops outside the foreground process group; it writes the backup's `info.xml` without fsync, so a power cut right after a restore leaves an orphaned backup.
@@ -98,6 +98,12 @@ Last updated: 2026-11-13
   - **Login screen** (`pyre-cli` 0.2.2): the system unit `002-greeter-appearance` seeds Ember into the greeter's `sync.toml` until someone syncs, and creates `greeter.toml` with `hide_logo = true` when missing. Checked in the VM on the software-rendered greeter (`--display none`): the cabin wallpaper, a warm card, the orange accent, and no Noctalia logo. `tools/test-theme` and `tools/test-e2e` check the seeded files.
   - Learned along the way: under sustained serial output the test console sometimes doubles a character. A long probe can then lose its end marker, so read long files through the 9p share instead.
   - **ISO BIOS menu:** `iso/syslinux/splash.png` is now the cabin at night (`tools/render-wallpaper`, 640×480), and the menu uses Ember's colors. `tools/test-iso` captures both firmwares' menus and fails a BIOS menu that isn't the Ember splash. It fails on the ISO built on 2026-11-13, which shows releng's Arch logo, until the next rebuild.
+  - **Alternative themes** (`pyre-themes` 0.3.0, 2026-11-14): Birch (light), Evergreen and Frost, all original, each the Ember cabin at another hour or season. `tools/theme-palettes` generates every palette (it replaces `tools/ember-palette`, and Ember's own colors are byte-identical), and `tools/render-wallpaper` renders every wallpaper plus a 1640×400 banner. Ember carries Birch as its light variant, and the reverse. `check-themes` exempts white rather than black from the ANSI contrast check on light variants.
+  - **Welcome panel** (ADR 0016, `pyre-desktop` 0.3.0, `pyre-cli` 0.3.0): the Noctalia plugin `pyre/welcome`, "Welcome home.", with the theme buttons, the main keys, updates, `pyre doctor`, the settings and the guide. `pyre welcome` opens it, and niri runs `pyre welcome --first-login` once.
+  - **User guide** (`docs/guide/`, installed to `/usr/share/doc/pyre/guide/`): first steps, keys (`docs/KEYBINDINGS.md`), themes, updates and snapshots, software, troubleshooting. The panel renders it.
+  - `tools/test-theme` passed on 2026-11-14 with both added: the panel opens by itself at the first login, shows the guide, and its Birch button switches the theme. Then every theme sets its wallpaper and GTK mode, and recolors an open foot and nautilus (screen pixels). Two layout bugs found in the VM were fixed: the footer was clipped, and the guide's scroll area had no height.
+  - **Exit review** (`tools/test-visual`, passed 2026-11-14): one boot of an overlay of the e2e disk with the new packages and the Plymouth boot step, captured in order: the Limine menu, the splash's unlock prompt and progress, the login screen, the welcome panel and its guide at the first login, the desktop (foot running fastfetch, and nautilus) in Ember, Birch, Evergreen and Frost, and the control center. Then it locks with Super+Alt+L (checked through Noctalia's state and logind's LockedHint) and unlocks with the password. The boot surfaces are QEMU captures without GL; niri skips software renderers, so the desktop runs with GL and is captured by niri. The lock screen is the one surface not captured (niri does not capture it, the limit accepted in P3). Waiting for the user's sign-off.
+  - Follow-ups seen in the review: fastfetch shows the Arch logo, since it does not know `ID=pyreos`, and the launcher capture was missed because of a wrong key name in the test (fixed since).
 - **e2e on the rebuilt ISO (2026-11-13):** `tools/test-e2e` passed every stage, including the new `pacman-unlocked` check after rollback.
 - **Fixed on the way:** a restored snap-pac "pre" snapshot carries `/var/lib/pacman/db.lck`, so pacman stayed locked after `pyre rollback`. `pyre-base` 0.3.1 clears it at boot with a tmpfiles rule.
 - **Release key** (2026-11-13, `docs/reference/release-key.md`): primary `65D123DD9A18A346A94C38E6228693F6D58F0A7F`, certify-only, kept offline. Signing subkey `279066B8C9E6FD17B3B9189C588DC5476F4A31E4`, expiring 2028-11-12, held in the Actions secret `PYRE_SIGNING_SUBKEY`. `pyre-keyring` 0.2.0 trusts it alongside the dev key.

@@ -97,6 +97,10 @@ stage_desktop() {
   expect keyring-unlocked 'ls /home/'"$user"'/.local/share/keyrings/' 'login\.keyring'
   expect login-reconcile 'u systemctl --user show pyre-reconcile.service -p Result --value' '^success$'
   # Ember from the first login (ADR 0015): the installer linked its palette, and
+  # The welcome panel opens by itself at the first login (ADR 0016); close
+  # it so the keyboard and screenshot checks below see the bare desktop.
+  expect welcome-shown 'for _ in $(seq 60); do test -e /home/'"$user"'/.local/state/pyre/welcome/shown && break; sleep 1; done; test -e /home/'"$user"'/.local/state/pyre/welcome/shown && echo shown' '^shown$'
+  expect welcome-close 'u noctalia msg panel-close pyre/welcome:welcome; echo rc=$?' '^rc=0$'
   # Noctalia wrote the theme into the apps without editing the user's configs.
   expect theme-ember 'u noctalia msg color-scheme-get' '^custom Ember$'
   expect theme-niri 'grep -c "#d9803c" /home/'"$user"'/.config/niri/noctalia.kdl' '^[1-9]'

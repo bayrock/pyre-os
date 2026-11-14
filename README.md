@@ -7,7 +7,7 @@ PyreOS is a polished, keyboard-first Arch Linux desktop built on [Niri](https://
 - one cohesive look from boot splash to lock screen
 - a codebase small enough to read in an afternoon
 
-> **Status:** early development. The live ISO installs an encrypted, snapshot-protected niri + Noctalia desktop offline, with the `pyre` lifecycle tool (P4 accepted). Next: the hosted package channel and P5 (themes and identity). See [docs/STATUS.md](docs/STATUS.md).
+> **Status:** early development. The live ISO installs an encrypted, snapshot-protected niri + Noctalia desktop offline, with the `pyre` lifecycle tool (P4 accepted), signed packages on a hosted testing channel, and four themes with a welcome panel (P5, in review). See [docs/STATUS.md](docs/STATUS.md).
 
 ## Documents
 

@@ -44,7 +44,7 @@ Phases run in order. A phase is accepted only when its exit criteria pass with e
   - every reconcile unit's test shows that a second run is a no-op
   - a deliberately broken update can be rolled back to a working desktop
 
-## P5: Polish and identity (next)
+## P5: Polish and identity (in review)
 
 - Build the theme system on Noctalia's palettes and templates (ADR 0015), with `pyre theme`.
 - Ship the "Ember" default theme plus curated alternatives.

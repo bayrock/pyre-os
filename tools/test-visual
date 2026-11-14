@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2016 # probes are typed into the guest verbatim
+# The P5 visual review, from boot menu to lock screen, as real screen
+# captures. Boots a throwaway overlay of an installed test disk (default
+# build/vm/test-e2e), installs the newest local pyre-base, pyre-cli,
+# pyre-themes and pyre-desktop, applies pyre-install's boot step (the
+# Plymouth splash), and then walks one boot: the Limine menu, the splash's
+# unlock prompt and progress, the login screen, the first login's welcome
+# panel and its guide, the desktop in every theme, and the lock screen.
+# Two boots: the boot surfaces run without GL (--display none), where QEMU
+# can capture the console; niri skips software renderers, so the desktop
+# runs with GL and is captured by niri's own screenshots. niri does not
+# capture the lock screen (as in P3), so the lock is checked through
+# Noctalia's state. The base disk is never written.
+# Usage: tools/test-visual [--base NAME]
+# Evidence: build/vm/test-visual/share/NN-*.png, in boot order
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+tool=test-visual
+name=test-visual
+base_name=test-e2e
+case "${1:-}" in
+  --base) base_name="${2:?--base needs a VM name}" ;;
+  -h|--help) sed -n '3,14s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
+  "") ;;
+  *) echo "$tool: unknown argument: $1" >&2; exit 2 ;;
+esac
+# shellcheck source=tools/lib/vmtest.sh
+source "$repo_root/tools/lib/vmtest.sh"
+
+base="$repo_root/build/vm/$base_name"
+[[ -f "$base/disk.qcow2" && -f "$base/OVMF_VARS.4m.fd" ]] ||
+  { echo "$tool: no installed disk in $base; run tools/test-e2e first" >&2; exit 1; }
+if [[ -f "$base/qemu.pid" ]] && kill -0 "$(<"$base/qemu.pid")" 2>/dev/null; then
+  echo "$tool: $base_name is running; stop it first" >&2; exit 1
+fi
+shopt -s nullglob
+rm -rf -- "$vm_dir"
+mkdir -p -- "$vm_dir/share/pkgs"
+for pkg in pyre-base pyre-cli pyre-themes pyre-desktop; do
+  files=("$repo_root"/build/repo/"$pkg"-[0-9]*.pkg.tar.zst)
+  (( ${#files[@]} )) || { echo "$tool: no $pkg in build/repo; run tools/build-pkgs" >&2; exit 1; }
+  cp -- "${files[-1]}" "$vm_dir/share/pkgs/"
+  [[ -f "${files[-1]}.sig" ]] && cp -- "${files[-1]}.sig" "$vm_dir/share/pkgs/"
+done
+hooks="$(sed -n "s/^readonly INITRAMFS_HOOKS='\(.*\)'$/\1/p" "$repo_root/src/installer/lib/boot.sh")"
+[[ "$hooks" == *" plymouth "* ]] || { echo "$tool: pyre-install's hooks have no plymouth" >&2; exit 1; }
+qemu-img create -q -f qcow2 -b "$base/disk.qcow2" -F qcow2 "$vm_dir/disk.qcow2"
+cp -- "$base/OVMF_VARS.4m.fd" "$vm_dir/"
+
+count=0
+# shoot NAME: a niri screenshot of the session as NN-NAME.png.
+shoot() {
+  count=$((count + 1))
+  shot "$1"
+  mv -- "$share/desktop-$1.png" "$share/$(printf '%02d' "$count")-$1.png"
+}
+# capture NAME: a QEMU screendump into the share as NN-NAME.png, retried
+# while the display settles.
+capture() {
+  local _ file
+  count=$((count + 1))
+  file="$share/$(printf '%02d' "$count")-$1.png"
+  for _ in $(seq 15); do
+    if "$repo_root/tools/vm-ctl" --name "$name" screendump "$file" >/dev/null 2>&1; then
+      pass "captured ${file##*/}"
+      return 0
+    fi
+    sleep 1
+  done
+  die "no screen to capture for $1"
+}
+pixel() { # FILE X Y: the pixel as RRGGBB
+  local hex
+  hex="$(magick "$1" -format "%[hex:p{$2,$3}]" info:)"
+  printf '%s\n' "${hex:0:6}"
+}
+# wait_pixel X Y RRGGBB SECONDS: until the screen shows that color there.
+wait_pixel() {
+  local _ probe="$vm_dir/probe.png"
+  for _ in $(seq "$4"); do
+    if "$repo_root/tools/vm-ctl" --name "$name" screendump "$probe" >/dev/null 2>&1 &&
+      [[ "$(pixel "$probe" "$1" "$2")" == "$3" ]]; then
+      rm -f -- "$probe"
+      return 0
+    fi
+    sleep 1
+  done
+  rm -f -- "$probe"
+  return 1
+}
+
+# --- 1. the packages and pyre-install's boot step --------------------------------
+start_vm setup --net --boot-disk
+unlock_and_login
+expect share 'mkdir -p /mnt/share && mount -t 9p -o trans=virtio pyre-share /mnt/share && echo mounted' '^mounted$'
+expect install 'printf "Server = https://github.com/bayrock/pyre-os/releases/download/testing\n" > /etc/pacman.d/pyre-mirrorlist; pacman -Sy >/dev/null 2>&1; pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-visual-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-visual-install.log' '^rc=0$'
+expect boot-step 'sed -i "s/^HOOKS=.*/HOOKS=('"$hooks"')/" /etc/mkinitcpio.conf && plymouth-set-default-theme pyre && sed -i "s/^KERNEL_CMDLINE\[default\]+=\"/&quiet splash plymouth.ignore-serial-consoles /" /etc/default/limine && limine-update >/var/log/test-visual-update.log 2>&1; echo rc=$?' '^rc=0$'
+power_off
+
+# --- 2. boot: Limine, the splash, the login screen ---------------------------------
+start_vm review --boot-disk --display none
+sleep 3
+capture limine-menu
+# The splash's unlock field (pyre.script's layout on the 1280x800 output).
+wait_pixel 640 494 251C16 120 || die "the splash's unlock prompt never appeared"
+capture splash-unlock
+type_keys "$passphrase"$'\n'
+sleep 1.5
+capture splash-booting
+serial_login
+expect greeter-rendered 'for _ in $(seq 90); do journalctl -b -o cat _UID=$(id -u greeter) | grep -q "presented first frame" && break; sleep 1; done; journalctl -b -o cat _UID=$(id -u greeter) | grep -c "presented first frame"' '^[1-9]'
+sleep 5
+capture greeter
+
+power_off
+
+# --- 3. the first login, with GL: the welcome panel and its guide -----------------
+start_vm desktop --boot-disk
+unlock_and_login
+greeter_login
+expect welcome-shown 'for _ in $(seq 90); do test -e /home/'"$user"'/.local/state/pyre/welcome/shown && break; sleep 1; done; test -e /home/'"$user"'/.local/state/pyre/welcome/shown && echo shown' '^shown$'
+sleep 6
+shoot welcome
+expect welcome-guide 'u pyre welcome guide; echo rc=$?' '^rc=0$'
+sleep 4
+shoot welcome-guide
+expect welcome-close 'u noctalia msg panel-close pyre/welcome:welcome; echo rc=$?' '^rc=0$'
+
+# --- 4. the desktop in every theme, with a terminal and the file manager ----------
+send_keys meta_l-ret
+sleep 4
+probe nautilus 'u setsid -f nautilus >/dev/null 2>&1; sleep 6' >/dev/null
+probe fetch 'u niri msg action focus-column-first >/dev/null; sleep 1' >/dev/null
+type_keys "clear; fastfetch"$'\n'
+sleep 4
+for theme in ember birch evergreen frost; do
+  expect "set-$theme" "u pyre theme set $theme >/dev/null; sleep 6; u pyre theme current" "^$theme\$"
+  shoot "desktop-$theme"
+done
+expect set-ember 'u pyre theme set ember >/dev/null; sleep 6; u pyre theme current' '^ember$'
+send_keys meta_l-spc
+sleep 3
+shoot launcher
+send_keys esc
+sleep 1
+send_keys meta_l-s
+sleep 3
+shoot control-center
+send_keys esc
+sleep 1
+
+# --- 5. the lock screen -----------------------------------------------------------
+send_keys meta_l-alt-l
+sleep 6
+grep -q '"locked":true' <<<"$(noctalia_status lock)" || die "Super+Alt+L did not lock"
+expect locked-hint 'loginctl show-session $(loginctl show-user '"$user"' -p Display --value) -p LockedHint --value' '^yes$'
+type_keys "$password"$'\n'
+sleep 4
+grep -q '"locked":false' <<<"$(noctalia_status unlock)" || die "the password did not unlock"
+pass "unlocked"
+power_off
+printf '%s: PASS (%d captures in %s)\n' "$tool" "$count" "$share"

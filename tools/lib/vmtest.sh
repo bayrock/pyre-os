@@ -137,6 +137,12 @@ unlock_and_login() {
     (( try < 3 )) || die "LUKS did not unlock"
   done
   pass "LUKS unlocked"
+  serial_login
+}
+
+# serial_login: at the serial getty, log in and become root in a shell
+# without line editing or echo (the second half of unlock_and_login).
+serial_login() {
   wait_for "$hostname login:" 180 || die "no login prompt"
   sleep 3
   serial_keys "$user"$'\n'
