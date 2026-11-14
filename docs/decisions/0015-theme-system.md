@@ -35,6 +35,7 @@ ADR 0005 already requires that "the theme system must drive Noctalia's palette, 
   - `primary`, `secondary` and `tertiary` are the fire ramp: orange, gold and coral
   - text is the page's cream
   - it is dark only, like the page
+  - `tools/ember-palette` derives `palette.json` from those OKLCH values, and `tools/check` keeps the two in sync
 - **matugen is not used.** Noctalia's engine replaces it.
 - **Parts Noctalia cannot reach,** Limine and Plymouth at boot, will take their colors from the active theme's `palette.json` through a separate, root-owned step. That comes later in P5.
 

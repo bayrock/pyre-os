@@ -54,6 +54,8 @@ tools/check-profile || fail check-profile
 
 step "themes"
 tools/check-themes || fail check-themes
+tools/ember-palette 2>/dev/null | cmp -s - themes/ember/palette.json ||
+  fail "themes/ember/palette.json differs from tools/ember-palette's output"
 
 if [[ -d tests ]] && find tests -name '*.bats' -print -quit | grep -q .; then
   step "bats"
