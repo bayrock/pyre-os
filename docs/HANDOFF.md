@@ -4,7 +4,7 @@
 
 Everything P6 can prove in a VM is built and passing (STATUS has the table). What is left touches the host's disks and firmware, so **the owner runs it** and the agent prepares, tests in VMs, and fixes what the machine shows.
 
-1. **Owner: rebuild the ISO**, so it carries `pyre-installer` 0.4.0, `pyre-cli` 0.3.1 and `pyre-desktop` 0.3.2:
+1. **Owner: rebuild the ISO**, so it carries `pyre-installer` 0.4.0, `pyre-cli` 0.3.1, `pyre-desktop` 0.3.2 and `pyre-base` 0.5.1:
 
    ```sh
    tools/build-pkgs && sudo tools/build-iso
