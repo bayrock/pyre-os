@@ -6,6 +6,9 @@
 
 vm_dir="$repo_root/build/vm/$name"
 log="$vm_dir/serial.log"
+# shellcheck source=tools/lib/vmlock.sh
+source "$repo_root/tools/lib/vmlock.sh"
+vm_lock wait "$tool"
 user=pyre
 password=pyre-test
 passphrase=pyre-test-luks

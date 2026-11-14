@@ -93,6 +93,10 @@ if [[ -n "$disk2" ]]; then
   [[ "$disk2" == "$repo_root/build/"* ]] || die "the second disk must be an image under build/: $disk2"
 fi
 
+# shellcheck source=tools/lib/vmlock.sh
+source "$repo_root/tools/lib/vmlock.sh"
+vm_lock try run-vm || die "one VM job at a time on this machine (docs/BUILDING.md)"
+
 command -v qemu-system-x86_64 >/dev/null 2>&1 || die "qemu-system-x86_64 not found; install qemu-desktop (see docs/BUILDING.md)"
 [[ -r /dev/kvm && -w /dev/kvm ]] || die "/dev/kvm is not accessible; KVM acceleration is required"
 

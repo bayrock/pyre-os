@@ -120,6 +120,8 @@ The test credentials are fixed and not secret.
 
 **Why the desktop screenshots come from niri.** niri refuses software rendering, so the desktop needs virgl. QEMU 11 cannot `screendump` a virgl scanout ("no surface"), so the harness takes niri screenshots in the guest and copies them out through the 9p share. niri does not screenshot the lock screen, so the lock checks use Noctalia's and logind's lock state instead.
 
+**One VM job at a time.** Every VM test and `tools/run-vm` takes one lock for the whole machine (`tools/lib/vmlock.sh`), whichever checkout or worktree it starts from. A test waits for the running job to end, and `run-vm` by hand refuses and names it. A guest takes 4 GiB, and three install tests side by side once ran the development machine out of memory.
+
 For manual work:
 
 ```sh

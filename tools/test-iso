@@ -20,6 +20,9 @@ if [[ -z "$iso" ]]; then
     sort -n | tail -n 1 | cut -d' ' -f2-)"
 fi
 [[ -n "$iso" && -f "$iso" ]] || die "no ISO found; build one with sudo tools/build-iso"
+# shellcheck source=tools/lib/vmlock.sh
+source "$repo_root/tools/lib/vmlock.sh"
+vm_lock wait test-iso
 
 # Wait until the serial log matches a pattern; fail on panic or timeout.
 wait_for() {
