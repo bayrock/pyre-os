@@ -6,8 +6,8 @@ description: >
   ~/.bashrc, GTK or btop; keybindings, monitors and outputs, window rules, gaps,
   the bar, launcher, notifications, lock and idle, wallpaper, themes and colors;
   screenshots and screen recording; installing software and bundles; and the
-  pyre command: pyre update, snapshots, rollback, doctor, theme, hardware
-  rules, the welcome panel. Triggers: PyreOS, pyre, niri, Noctalia, foot,
+  pyre command: pyre update, snapshots, rollback, doctor, theme, reminders,
+  hardware rules, the welcome panel. Triggers: PyreOS, pyre, niri, Noctalia, foot,
   snapper, Limine, "after an update", "roll back", "my screen", "my keys".
   Not for developing PyreOS itself.
 ---
@@ -70,6 +70,7 @@ The rest is stock Arch Linux: pacman, systemd, PipeWire, NetworkManager, bluez, 
 | `pyre install`, `pyre remove` | Adds or removes a bundle of apps: `dev`, `media`, `office` |
 | `pyre hw` | Shows the hardware rules that match this machine; `pyre hw apply` installs their drivers and settings |
 | `pyre reconcile` | Applies PyreOS's own changes after an update. It runs by itself; `--dry-run` shows what it would do |
+| `pyre remind` | Sets a reminder: `pyre remind 10m tea`, `pyre remind tomorrow 9am standup`; `pyre remind list` and `pyre remind cancel` manage them. In the launcher it is `/remind 10m tea` |
 | `pyre welcome` | Opens the welcome panel; `pyre welcome guide` opens the user guide in it |
 | `pyre help` | The list above, from the system itself |
 
@@ -106,5 +107,7 @@ The rest is stock Arch Linux: pacman, systemd, PipeWire, NetworkManager, bluez, 
 - "Update my system" → `pyre update`, in a terminal the user can type a password in
 - "The update broke something" → the steps in [`lifecycle.md`](lifecycle.md): boot the snapshot from before it, then `pyre rollback`
 - "Is my system healthy?" → `pyre doctor`
+- "Remind me to call the bank at 3" → `pyre remind 3pm call the bank`; it arrives as a notification that stays until dismissed
+- "Warmer screen in the evening" → night light: **Super + Ctrl + N** at once, or the schedule in [`noctalia.md`](noctalia.md)
 - "What keys are there?" → `/usr/share/doc/pyre/guide/02-keys.md`, or **Super + Shift + /** on screen
 - "Record my screen" → **Super + Print** starts and stops a recording (`pyre-record`); it is saved in `~/Videos`

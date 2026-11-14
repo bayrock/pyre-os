@@ -37,7 +37,8 @@ Read `/usr/share/pyre/defaults/noctalia/pyre.toml` for the exact keys. In short:
 - Noctalia is the polkit agent, telemetry is off, and the first-run wizard is off.
 - The theme is the custom palette "Ember"; see [`themes.md`](themes.md).
 - The screen locks after 10 minutes idle and the screens turn off a minute later. Noctalia locks before suspend.
-- The welcome panel is a Noctalia plugin, `pyre/welcome`, loaded from `/usr/share/pyre/noctalia/plugins/`.
+- Night light is off, and its schedule has fixed hours, 20:00 to 07:00, so it needs no location.
+- The welcome panel and the launcher's reminders are Noctalia plugins, `pyre/welcome` and `pyre/remind`, loaded from `/usr/share/pyre/noctalia/plugins/`.
 
 To change the idle times in the user's file:
 
@@ -51,6 +52,26 @@ timeout = 360
 
 Setting `enabled = false` in one of those tables turns that behavior off.
 
+## Night light
+
+Night light is Noctalia's own blue light filter; there is no separate gamma program to install or configure.
+
+- **Super + Ctrl + N** (`noctalia msg nightlight-force-toggle`) holds the warm light on at once, until it is pressed again or the user logs out.
+- For every evening, the user turns on **Night Light** in the settings window, under Services. In a file that is:
+
+```toml
+[nightlight]
+enabled = true
+
+[location]
+custom_schedule = true
+sunset = "21:30"
+sunrise = "06:30"
+```
+
+- PyreOS never looks the user's location up. To follow the real sunset, the user enters a place on the settings' Location page and turns **Custom Schedule** off.
+- A screenshot or recording never shows the tint. To check that it is on, read the shell's log: `journalctl --user -b | grep 'target .*K'`.
+
 ## Commands
 
 `noctalia msg` talks to the running shell. These are the commands PyreOS's own keys and tools use:
@@ -61,6 +82,7 @@ Setting `enabled = false` in one of those tables turns that behavior off.
 | `noctalia msg settings-toggle` | The settings window |
 | `noctalia msg session lock` | Locks the screen (`loginctl lock-session` does too) |
 | `noctalia msg notification-dnd-toggle` | Do not disturb |
+| `noctalia msg nightlight-force-toggle` | Night light on at once, or off again |
 | `noctalia msg volume-up`, `volume-down`, `volume-mute`, `mic-mute` | Sound, with the on-screen display |
 | `noctalia msg brightness-up`, `brightness-down` | Brightness |
 | `noctalia msg media toggle` | Media: `toggle`, `stop`, `previous`, `next` |

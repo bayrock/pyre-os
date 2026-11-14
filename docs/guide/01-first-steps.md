@@ -33,6 +33,18 @@ More software is one command away; see the Software page.
 - **Your config files** live in `~/.config`. PyreOS loads its defaults first and your files second, so whatever you set wins, and PyreOS never rewrites your files.
 - **With a coding agent:** if you use Claude Code, Codex, Gemini CLI or opencode, it already knows its way around. PyreOS gives each of them a skill named `pyre` that explains the system, so you can ask for a keybinding, a monitor layout or a rollback in plain words. The agents themselves are not installed; that choice is yours.
 
+## Remind me
+
+Open the launcher and type `/remind`, then when and what:
+
+- `/remind 10m tea`
+- `/remind 5pm call mum`
+- `/remind tomorrow 9am standup`
+
+The row shows the time PyreOS read; Enter sets the reminder. Plain words work too, without the slash: `remind me to call mum in 2 hours`. When the time comes, a notification appears and stays until you dismiss it. If the machine was asleep or off, it appears when you are back.
+
+`/remind` alone lists the reminders that are waiting, and Enter on one cancels it. In a terminal, the same is `pyre remind 10m tea`, `pyre remind list` and `pyre remind cancel`.
+
 ## The welcome panel
 
 The panel that greeted you is always one search away: open the launcher and type **Welcome**, or run `pyre welcome`. It can greet you at every login if you like; flip the switch at its bottom.

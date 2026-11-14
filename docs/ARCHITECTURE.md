@@ -187,11 +187,17 @@ The installer will offer bundles once the TUI is exercised.
 - "Welcome home.": the theme buttons (`pyre theme set`), the main keys, updates, `pyre doctor`, the shell settings, and the user guide (`docs/guide/`, installed to `/usr/share/doc/pyre/guide/`) rendered in place. Every color is a palette role, so it recolors with the theme.
 - `pyre welcome` opens it. niri runs `pyre welcome --first-login` at login, which opens it once (or at every login, `--at-login on`); the launcher lists it as "Welcome to PyreOS".
 
+### Remind me (`src/cli/commands/remind`, `src/desktop/remind/`, ADR 0020)
+
+- `pyre remind <when> [message]` sets a reminder: `10m tea`, `5pm call mum`, `tomorrow 9am standup`, or the time last, `call mum in 2 hours`. `pyre remind list` and `pyre remind cancel` manage them.
+- A reminder is a file in `~/.local/state/pyre/reminders/` and a transient systemd user timer on the wall clock. It fires as a notification that stays until dismissed. `pyre-remind.service` sets the timers again when the desktop starts, and shows what came due meanwhile.
+- In the launcher, the Noctalia plugin `pyre/remind` answers `/remind 10m tea` and plain `remind me to call mum at 5pm`. It shows the time `pyre remind` read before Enter sets it; `/remind` alone lists the pending reminders.
+
 ### CLI (`src/cli/`, package `pyre-cli`)
 
 - **One entrypoint,** `pyre <command>` (ADR 0014). Commands are files in `/usr/lib/pyre/commands/` with `# help:` and `# usage:` header metadata. The shared library is in `/usr/lib/pyre/lib/`, and the reconcile units are in `/usr/lib/pyre/reconcile/{system,user}/`.
-- **Commands:** `update`, `snapshot`, `rollback`, `doctor`, `reconcile`, `hw`, `install`/`remove <bundle>`, `theme`, `welcome`, `help`.
-- **Triggers:** an ALPM hook (`pyre-reconcile.hook`) runs system reconcile after `pyre-*` packages change, and `pyre-reconcile.service` (a user unit enabled globally) runs user reconcile at login.
+- **Commands:** `update`, `snapshot`, `rollback`, `doctor`, `reconcile`, `hw`, `install`/`remove <bundle>`, `theme`, `welcome`, `remind`, `help`.
+- **Triggers:** an ALPM hook (`pyre-reconcile.hook`) runs system reconcile after `pyre-*` packages change, and `pyre-reconcile.service` (a user unit enabled globally) runs user reconcile at login. `pyre-remind.service` sets the reminders' timers when the desktop starts.
 - **Budget:** under 5,000 lines total for the CLI plus the installer before 1.0. Every command needs a test, and anything over budget needs a reason in its ADR.
 
 ### Agent skill (`skills/`, shipped in `pyre-cli`, ADR 0019)
@@ -234,13 +240,13 @@ src/cli/                   pyre entrypoint, lib, commands
 src/installer/             pyre-install TUI and archinstall config generator
 defaults/                  → /usr/share/pyre/defaults
 skel/                      → /etc/skel (user stubs that include the defaults)
-src/desktop/               small desktop helpers (pyre-record) and the welcome panel plugin
+src/desktop/               small desktop helpers (pyre-record) and the Noctalia plugins (welcome, remind)
 system/                    → package-owned drop-ins
 themes/                    theme data: theme.toml and a Noctalia palette per theme
 skills/                    → /usr/share/pyre/skills (the agent skill, for coding agents on an installed machine)
 iso/                       archiso profile (releng-derived)
 tests/                     bats unit tests, VM e2e scenarios
-tools/                     build-pkgs, build-iso, run-vm, test-e2e, publish-repo
+tools/                     build-pkgs, build-iso, run-vm, test-e2e, test-remind, publish-repo
 docs/                      brief, architecture, roadmap, status, handoff, decisions/, reference/,
                            guide/ (the user guide, → /usr/share/doc/pyre/guide)
 landing/                   the website: site/ is published to GitHub Pages as-is

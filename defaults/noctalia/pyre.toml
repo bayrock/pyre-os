@@ -39,10 +39,11 @@ fill_color = "#130e0a"
 [wallpaper.default]
 path = "/usr/share/pyre/themes/ember/wallpapers/ember.jpg"
 
-# The PyreOS plugins (ADR 0016), from a read-only directory pyre-desktop
-# owns: the welcome panel ("pyre welcome").
+# The PyreOS plugins, from a read-only directory pyre-desktop owns: the
+# welcome panel ("pyre welcome", ADR 0016) and the launcher's reminders
+# ("/remind 10m tea", ADR 0020).
 [plugins]
-enabled = ["pyre/welcome"]
+enabled = ["pyre/welcome", "pyre/remind"]
 
 [[plugins.source]]
 name = "pyre"

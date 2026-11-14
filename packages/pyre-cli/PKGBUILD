@@ -6,12 +6,12 @@
 pkgname=pyre-cli
 pkgver=0.4.0
 pkgrel=1
-pkgdesc='PyreOS lifecycle tool: update, snapshot, rollback, doctor, reconcile, themes, welcome, hardware rules, agent skill'
+pkgdesc='PyreOS lifecycle tool: update, snapshot, rollback, doctor, reconcile, themes, welcome, reminders, hardware rules, agent skill'
 arch=(any)
 url='https://github.com/bayrock/pyre-os'
 license=(MIT)
 depends=(bash coreutils diffutils snapper sudo util-linux)
-optdepends=('libnotify: notifications about .pyre-new files')
+optdepends=('libnotify: notifications about .pyre-new files, and reminders')
 
 package() {
   local root="$startdir/../.." dir
@@ -29,4 +29,9 @@ package() {
     "$pkgdir/usr/lib/systemd/user/pyre-reconcile.service"
   install -d "$pkgdir/usr/lib/systemd/user/default.target.wants"
   ln -s ../pyre-reconcile.service "$pkgdir/usr/lib/systemd/user/default.target.wants/pyre-reconcile.service"
+  # pyre remind's timers are set again whenever the desktop starts (ADR 0020).
+  install -Dm644 "$root/system/systemd-user/pyre-remind.service" \
+    "$pkgdir/usr/lib/systemd/user/pyre-remind.service"
+  install -d "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
+  ln -s ../pyre-remind.service "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/pyre-remind.service"
 }

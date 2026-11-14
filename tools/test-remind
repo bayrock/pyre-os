@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2016 # probes are typed into the guest verbatim
+# "Remind me" (ADR 0020) on an installed desktop, headless under UEFI:
+# boots a throwaway overlay of an installed test disk (default build/vm/test-e2e),
+# installs the newest local pyre-cli and pyre-desktop onto its existing user,
+# logs in through the greeter, and sets reminders the three ways: "/remind …"
+# and "remind me …" in the launcher, and pyre remind in a terminal. One fires
+# as a notification that stays up, one is cancelled from the launcher, and an
+# ordinary search still starts an app. Then it powers off across a reminder
+# that comes due, and checks that the next login shows it and sets the timer
+# of the one still waiting. The base disk is never written.
+# Usage: tools/test-remind [--base NAME]
+# Evidence: build/vm/test-remind/share/desktop-remind-*.png
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+tool=test-remind
+name=test-remind
+base_name=test-e2e
+case "${1:-}" in
+  --base) base_name="${2:?--base needs a VM name}" ;;
+  -h|--help) sed -n '3,14s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
+  "") ;;
+  *) echo "$tool: unknown argument: $1" >&2; exit 2 ;;
+esac
+# shellcheck source=tools/lib/vmtest.sh
+source "$repo_root/tools/lib/vmtest.sh"
+
+base="$repo_root/build/vm/$base_name"
+[[ -f "$base/disk.qcow2" && -f "$base/OVMF_VARS.4m.fd" ]] ||
+  { echo "$tool: no installed disk in $base; run tools/test-e2e first" >&2; exit 1; }
+if [[ -f "$base/qemu.pid" ]] && kill -0 "$(<"$base/qemu.pid")" 2>/dev/null; then
+  echo "$tool: $base_name is running; stop it first" >&2; exit 1
+fi
+
+shopt -s nullglob
+rm -rf -- "$vm_dir"
+mkdir -p -- "$vm_dir/share/pkgs"
+for pkg in pyre-cli pyre-desktop; do
+  files=("$repo_root"/build/repo/"$pkg"-[0-9]*.pkg.tar.zst)
+  (( ${#files[@]} )) || { echo "$tool: no $pkg in build/repo; run tools/build-pkgs" >&2; exit 1; }
+  cp -- "${files[-1]}" "$vm_dir/share/pkgs/"
+  [[ -f "${files[-1]}.sig" ]] && cp -- "${files[-1]}.sig" "$vm_dir/share/pkgs/"
+done
+qemu-img create -q -f qcow2 -b "$base/disk.qcow2" -F qcow2 "$vm_dir/disk.qcow2"
+cp -- "$base/OVMF_VARS.4m.fd" "$vm_dir/"
+
+layout=1280x800   # one output
+reminders=/home/$user/.local/state/pyre/reminders
+
+# launcher TEXT: open the launcher and type TEXT.
+launcher() {
+  send_keys meta_l-spc
+  sleep 2
+  type_keys "$1"
+  sleep 3
+}
+
+# --- 1. install the packages on the console, before anyone logs in ---------------
+start_vm install-packages --boot-disk
+unlock_and_login
+expect share 'mkdir -p /mnt/share && mount -t 9p -o trans=virtio pyre-share /mnt/share && echo mounted' '^mounted$'
+expect install 'pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-remind-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-remind-install.log' '^rc=0$'
+expect plugin-files 'ls /usr/share/pyre/noctalia/plugins/remind | tr "\n" " "' '^plain\.luau plugin\.toml prefixed\.luau remind\.luau $'
+expect login-unit 'readlink /usr/lib/systemd/user/graphical-session.target.wants/pyre-remind.service' '^\.\./pyre-remind\.service$'
+power_off
+
+# --- 2. log in; the launcher, the terminal, a reminder that fires ----------------
+start_vm session --boot-disk
+unlock_and_login
+greeter_login
+probe welcome-close 'u noctalia msg panel-close pyre/welcome:welcome' >/dev/null
+expect plugin 'u noctalia msg plugins list 2>&1 | grep -c "pyre/remind"' '^[1-9]'
+# The login unit ran with the desktop, with nothing to set yet.
+expect login-unit-ran 'for _ in $(seq 30); do [ -n "$(u systemctl --user show pyre-remind.service -p ExecMainExitTimestamp --value)" ] && break; sleep 1; done; u systemctl --user show pyre-remind.service -p ExecMainExitTimestamp' '^ExecMainExitTimestamp=.+'
+expect login-unit-result 'u systemctl --user show pyre-remind.service -p Result -p ExecMainStatus | sort | tr "\n" " "' '^ExecMainStatus=0 Result=success $'
+expect nothing-pending 'u pyre remind list | wc -l' '^0$'
+
+# Behind the prefix: the row shows the time it read, Enter sets it.
+launcher "/remind 3h water the plants"
+shot remind-prefixed
+send_keys ret
+sleep 3
+shot remind-set
+expect prefixed-set 'u pyre remind list' '^1[[:space:]]+.*\(in 2 h 59 min\)[[:space:]]+water the plants$'
+expect prefixed-timer 'u systemctl --user is-active pyre-remind-1.timer' '^active$'
+
+# Typed like any search, in plain words, with the time last.
+launcher "remind me to stretch in 2 hours"
+shot remind-plain
+send_keys ret
+sleep 3
+expect plain-set 'u pyre remind list | head -n 1' '^2[[:space:]]+.*\(in 1 h 59 min\)[[:space:]]+stretch$'
+
+# The provider without a prefix leaves an ordinary search alone.
+launcher "nautilus"
+shot remind-search
+send_keys ret
+expect search-untouched 'for _ in $(seq 20); do u niri msg windows | grep -q "App ID: \"org.gnome.Nautilus\"" && break; sleep 1; done; u niri msg windows | grep -c "App ID: \"org.gnome.Nautilus\""' '^[1-9]'
+expect search-set-nothing 'u pyre remind list | wc -l' '^2$'
+
+# From a terminal; it fires as a notification that stays until dismissed.
+expect cli-set 'u pyre remind 15s the tea is ready' 'reminder 3 set for .*: the tea is ready$'
+expect fired 'for _ in $(seq 40); do test -e '"$reminders"'/3 || break; sleep 1; done; test -e '"$reminders"'/3 || echo fired' '^fired$'
+sleep 8
+expect notification-stays 'u niri msg layers | grep -c noctalia-notification' '^[1-9]'
+shot remind-fired
+expect timer-gone 'u systemctl --user list-units --all --plain --no-legend "pyre-remind-3.*" | wc -l' '^0$'
+
+# "/remind" alone lists what is waiting, soonest first; Enter on one cancels it.
+launcher "/remind"
+shot remind-pending
+send_keys down
+sleep 1
+send_keys ret
+sleep 3
+expect cancelled 'u pyre remind list' '^1[[:space:]]+.*[[:space:]]+water the plants$'
+expect cancelled-only-that 'u pyre remind list | wc -l' '^1$'
+expect cancelled-timer 'u systemctl --user is-active pyre-remind-2.timer; true' '^inactive$'
+
+# The shell reported no trouble with the plugin.
+expect plugin-quiet 'journalctl -b -o cat _UID=$(id -u '"$user"') | grep -i "pyre/remind" | grep -ci -e error -e warn -e fail || true' '^0$'
+
+# --- 3. a reminder that comes due while the machine is off -----------------------
+expect missed-set 'u pyre remind 40s the kettle' 'reminder 2 set for '
+power_off
+start_vm next-login --boot-disk
+unlock_and_login
+greeter_login
+expect missed-fired 'for _ in $(seq 60); do test -e '"$reminders"'/2 || break; sleep 1; done; test -e '"$reminders"'/2 || echo fired' '^fired$'
+sleep 3
+expect missed-shown 'u niri msg layers | grep -c noctalia-notification' '^[1-9]'
+shot remind-missed
+expect waiting-timer 'u systemctl --user is-active pyre-remind-1.timer' '^active$'
+expect waiting-kept 'u pyre remind list' '^1[[:space:]]+.*[[:space:]]+water the plants$'
+probe evidence 'cp /var/log/test-remind-install.log /mnt/share/ 2>/dev/null; journalctl -b -o cat _UID=$(id -u '"$user"') | grep -i -e remind > /mnt/share/journal-remind.log; true' >/dev/null
+power_off
+printf '%s: PASS (screenshots in %s)\n' "$tool" "$vm_dir/share"

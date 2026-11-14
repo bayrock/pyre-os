@@ -1,0 +1,29 @@
+# "Remind me" in the launcher: a Noctalia plugin (ADR 0020), shipped by
+# pyre-desktop in /usr/share/pyre/noctalia/plugins/remind/ and enabled by
+# PyreOS's Noctalia defaults. It only asks "pyre remind", which owns the
+# reminders.
+id = "pyre/remind"
+name = "Remind me"
+version = "1.0.0"
+# runAsync with an argument array (24): the newest level this needs.
+plugin_api = 24
+author = "PyreOS"
+license = "MIT"
+icon = "alarm"
+description = "Set a reminder from the launcher: /remind 10m tea"
+tags = ["pyreos", "reminder"]
+
+# "/remind 10m tea": everything behind the prefix is a reminder.
+[[launcher_provider]]
+id = "remind"
+entry = "prefixed.luau"
+prefix = "remind"
+glyph = "alarm"
+
+# "remind me to call mum at 5pm", typed like any search. Without a prefix
+# this provider sees every search, and answers only one that starts with
+# "remind".
+[[launcher_provider]]
+id = "plain"
+entry = "plain.luau"
+glyph = "alarm"

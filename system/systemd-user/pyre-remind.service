@@ -1,0 +1,13 @@
+# PyreOS (ADR 0020): the timers of "pyre remind" end with the session. When
+# the desktop starts, this sets them again and shows the reminders that came
+# due meanwhile. See them with: pyre remind list
+[Unit]
+Description=PyreOS reminders
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pyre remind --rearm
+
+[Install]
+WantedBy=graphical-session.target
