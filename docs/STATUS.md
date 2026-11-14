@@ -95,6 +95,7 @@ Last updated: 2026-11-13
     - `tools/test-splash` checks it on an overlay of the e2e disk: the mark, four bullets for four keys, and an unlock through the splash.
     - The test runs without GL (`--display none`), because QEMU has no capturable surface at the boot console with GL, and with `plymouth.ignore-serial-consoles`, because Plymouth falls back to text mode when a serial console is configured.
     - The shared VM unlock step also accepts the passphrase request itself, which `quiet` keeps on the serial console.
+  - **ISO BIOS menu:** `iso/syslinux/splash.png` is now the cabin at night (`tools/render-wallpaper`, 640×480), and the menu uses Ember's colors. `tools/test-iso` captures both firmwares' menus and fails a BIOS menu that isn't the Ember splash. It fails on the ISO built on 2026-11-13, which shows releng's Arch logo, until the next rebuild.
 - **e2e on the rebuilt ISO (2026-11-13):** `tools/test-e2e` passed every stage, including the new `pacman-unlocked` check after rollback.
 - **Fixed on the way:** a restored snap-pac "pre" snapshot carries `/var/lib/pacman/db.lck`, so pacman stayed locked after `pyre rollback`. `pyre-base` 0.3.1 clears it at boot with a tmpfiles rule.
 - **Release key** (2026-11-13, `docs/reference/release-key.md`): primary `65D123DD9A18A346A94C38E6228693F6D58F0A7F`, certify-only, kept offline. Signing subkey `279066B8C9E6FD17B3B9189C588DC5476F4A31E4`, expiring 2028-11-12, held in the Actions secret `PYRE_SIGNING_SUBKEY`. `pyre-keyring` 0.2.0 trusts it alongside the dev key.

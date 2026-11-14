@@ -11,7 +11,8 @@ monitor shape (Noctalia's default fill mode) keeps the cabin.
 Writes themes/ember/wallpapers/ember.svg (the source) and, with rsvg-convert
 and ImageMagick, ember.jpg at 3840x2160 with a fine grain against banding,
 plus the boot menu's 1920x1080 copy for Limine,
-packages/pyre-base/limine-wallpaper.jpg.
+packages/pyre-base/limine-wallpaper.jpg, and the ISO's 640x480 BIOS menu
+background, iso/syslinux/splash.png (a centred 4:3 crop).
 
 Usage: tools/render-wallpaper [--svg-only | --print-svg]
   --print-svg   print the SVG only (tools/check compares it with ember.svg)
@@ -28,6 +29,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SITE = ROOT / "landing" / "site"
 OUT = ROOT / "themes" / "ember" / "wallpapers"
 BOOT = ROOT / "packages" / "pyre-base" / "limine-wallpaper.jpg"
+ISO_SPLASH = ROOT / "iso" / "syslinux" / "splash.png"
 W, H = 3840, 2160
 
 
@@ -162,7 +164,11 @@ def main(argv):
         subprocess.run(["magick", str(png), "-resize", "1920x1080", "-seed", "58", "-attenuate", "0.2",
                         "+noise", "Gaussian", "-strip", "-interlace", "none", "-sampling-factor", "4:2:0",
                         "-quality", "85", str(BOOT)], check=True)
-    print(f"wrote {source.relative_to(ROOT)}, {(OUT / 'ember.jpg').relative_to(ROOT)} and {BOOT.relative_to(ROOT)}")
+        # syslinux's vesamenu needs exactly 640x480; a 4:3 crop keeps the cabin.
+        subprocess.run(["magick", str(png), "-resize", "x480", "-gravity", "center", "-crop", "640x480+0+0",
+                        "+repage", "-strip", f"PNG24:{ISO_SPLASH}"], check=True)
+    print(f"wrote {source.relative_to(ROOT)}, {(OUT / 'ember.jpg').relative_to(ROOT)}, "
+          f"{BOOT.relative_to(ROOT)} and {ISO_SPLASH.relative_to(ROOT)}")
     return 0
 
 

@@ -47,7 +47,24 @@ run_one() {
   # shellcheck disable=SC2064 # expand now: stop this VM on any exit.
   trap "'$repo_root/tools/vm-ctl' --name '$name' quit >/dev/null 2>&1 || true" EXIT
 
-  local start=$SECONDS
+  # The boot menu, as evidence (build/vm/<name>/boot-menu.png). The BIOS menu
+  # is syslinux on the Ember splash (ADR 0015): its lower band is the warm
+  # treeline, never releng's blue.
+  local start=$SECONDS shot="$repo_root/build/vm/$name/boot-menu.png" _
+  for _ in 1 2 3 4 5 6 7 8; do
+    sleep 1
+    "$repo_root/tools/vm-ctl" --name "$name" screendump "$shot" >/dev/null 2>&1 && break
+  done
+  if [[ "$firmware" == bios && -s "$shot" ]]; then
+    local band
+    band="$(magick "$shot" -crop 640x60+0+410 +repage -resize 1x1 -format '%[fx:int(255*r)] %[fx:int(255*b)]' info: 2>/dev/null || true)"
+    if read -r red blue <<<"$band" && (( red > blue )); then
+      printf '   boot menu: Ember splash (%s)\n' "${shot#"$repo_root"/}"
+    else
+      printf 'FAIL %s: the boot menu is not the Ember splash (lower band r/b: %s)\n' "$firmware" "$band"
+      result=1
+    fi
+  fi
   if ! wait_for "$log" 'archiso login:'; then
     printf 'FAIL %s: no serial login prompt (see %s)\n' "$firmware" "$log"
     result=1

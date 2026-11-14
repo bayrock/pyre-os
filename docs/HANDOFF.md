@@ -6,8 +6,11 @@
 2. **The testing channel: live on 2026-11-13** (`docs/BUILDING.md`, "The testing channel"). Every push to `main` publishes signed packages to the `testing` release, and `pyre-release` 0.3.0 points installed systems at it. **Any package change needs a `pkgver`/`pkgrel` bump**, or the publish job fails. `tools/test-channel` checks that an installed VM updates from it.
 3. **P5 theme system: started on 2026-11-13** (ADR 0015). A theme is a Noctalia palette in `themes/<id>/`, shipped by `pyre-themes`. Ember comes from the landing page. Noctalia's built-in templates color niri, foot, GTK 3/4 and btop, and `pyre theme` lists and sets themes. `tools/test-theme` (VM) passes. Next in P5:
    - Done: the Ember wallpaper (`tools/render-wallpaper`), live recolor of open foot and GTK windows (`pyre theme refresh`), the Limine boot menu (`pyre-boot-branding`), and the Plymouth splash (`tools/test-splash`).
-   - Next: the ISO's boot menus (`iso/syslinux/splash.png` is Arch artwork), and the greeter (check Noctalia's appearance sync). Boot surfaces wear Ember for every user (ADR 0015).
-   - **The next ISO rebuild** (user, `sudo tools/build-iso`) brings Plymouth to fresh installs. `tools/test-e2e` then unlocks through Plymouth's text mode (the test VMs use a serial console).
+   - Done too: the ISO's BIOS menu (the cabin splash and Ember's `MENU COLOR`s, `iso/UPSTREAM.md` item 9).
+   - Next: the greeter (check Noctalia's appearance sync). Boot surfaces wear Ember for every user (ADR 0015).
+   - **The next ISO rebuild** (user, `sudo tools/build-iso`) brings Plymouth and the BIOS splash to the ISO and fresh installs. Then run:
+     - `tools/test-iso`: it fails BIOS on the current ISO, which still shows releng's Arch logo, by design
+     - `tools/test-e2e`: it unlocks through Plymouth's text mode (the test VMs use a serial console)
    - Curated alternative themes (license-checked palettes), and the welcome flow and user docs.
    - **Pending ISO rebuild (user, `sudo tools/build-iso`):** the next `tools/test-e2e` run checks Ember from the first login on a fresh install (`theme-ember` and the checks after it in the desktop stage).
 4. **Optional: install images.** Publishing the ISO to the `testing` release (CI needs a privileged container for mkarchiso, and the 3.7 GB image is over GitHub's 2 GiB per-asset limit, so it must be split or slimmed) would unlock the landing page's "Install" pill. The pill waits for install images, not packages (`landing/README.md`).
