@@ -85,6 +85,8 @@ stage_desktop() {
   expect greeter 'systemctl is-active greetd; pgrep -u greeter -f "^/usr/bin/noctalia-greeter$" >/dev/null && echo greeter-running' '^greeter-running$'
   expect greeter-rendered 'journalctl -b -o cat _UID=$(id -u greeter) | grep -c "presented first frame"' '^[1-9]'
   expect greeter-no-keyring 'pgrep -u greeter -c gnome-keyring || true' '^0$'
+  # The login screen wears Ember until someone syncs their own look (ADR 0015).
+  expect greeter-ember 'grep -q "^primary = \"#d9803c\"" /var/lib/noctalia-greeter/sync.toml && grep -q "^hide_logo = true" /var/lib/noctalia-greeter/greeter.toml && echo seeded' '^seeded$'
 
   # Login through noctalia-greeter: the password field has the focus.
   sleep 3

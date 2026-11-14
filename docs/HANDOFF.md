@@ -7,7 +7,8 @@
 3. **P5 theme system: started on 2026-11-13** (ADR 0015). A theme is a Noctalia palette in `themes/<id>/`, shipped by `pyre-themes`. Ember comes from the landing page. Noctalia's built-in templates color niri, foot, GTK 3/4 and btop, and `pyre theme` lists and sets themes. `tools/test-theme` (VM) passes. Next in P5:
    - Done: the Ember wallpaper (`tools/render-wallpaper`), live recolor of open foot and GTK windows (`pyre theme refresh`), the Limine boot menu (`pyre-boot-branding`), and the Plymouth splash (`tools/test-splash`).
    - Done too: the ISO's BIOS menu (the cabin splash and Ember's `MENU COLOR`s, `iso/UPSTREAM.md` item 9).
-   - Next: the greeter (check Noctalia's appearance sync). Boot surfaces wear Ember for every user (ADR 0015).
+   - Done too: the login screen (Ember seeded until someone syncs, no Noctalia logo). Boot branding is complete: Limine, Plymouth, the ISO's BIOS menu and the greeter all wear Ember (ADR 0015).
+   - Next in P5: curated alternative themes (license-checked palettes), the welcome flow, and user documentation. Then the P5 exit review: a full visual pass from boot splash to lock screen.
    - **The next ISO rebuild** (user, `sudo tools/build-iso`) brings Plymouth and the BIOS splash to the ISO and fresh installs. Then run:
      - `tools/test-iso`: it fails BIOS on the current ISO, which still shows releng's Arch logo, by design
      - `tools/test-e2e`: it unlocks through Plymouth's text mode (the test VMs use a serial console)

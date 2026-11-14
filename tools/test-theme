@@ -74,6 +74,8 @@ expect installed 'pacman -Q pyre-themes adw-gtk-theme | wc -l' '^2$'
 expect limine-block 'head -n 1 /boot/limine.conf; grep -c "^interface_branding: PyreOS$" /boot/limine.conf; test -s /boot/pyre/wallpaper.jpg && echo wallpaper' '^# >>> PyreOS boot menu$'
 expect limine-entries 'limine-update >/dev/null 2>&1; echo rc=$?; grep -c "^# >>> PyreOS boot menu$" /boot/limine.conf; grep -c "^ */" /boot/limine.conf' '^rc=0$'
 expect limine-block-kept 'grep -c "^# >>> PyreOS boot menu$" /boot/limine.conf' '^1$'
+# The system reconcile seeded the login screen with Ember (ADR 0015).
+expect greeter-ember 'grep -q "^primary = \"#d9803c\"" /var/lib/noctalia-greeter/sync.toml && grep -q "^hide_logo = true" /var/lib/noctalia-greeter/greeter.toml && echo seeded' '^seeded$'
 power_off
 
 # --- 2. the boot menu, then log in, and Ember is the theme ------------------------

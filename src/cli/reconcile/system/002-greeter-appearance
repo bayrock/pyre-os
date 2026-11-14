@@ -1,0 +1,71 @@
+# shellcheck shell=bash disable=SC2034 # since is read by the engine
+# about: give the login screen Ember's colors and wallpaper until someone syncs their own (ADR 0015)
+# noctalia-greeter keeps synced appearance in /var/lib/noctalia-greeter/sync.toml,
+# which Noctalia's "Sync Now" replaces. A greeter that has never been synced
+# shows Noctalia's own look, so this seeds Ember there once: the palette from
+# themes/ember/palette.json and the theme's wallpaper. A sync.toml that already
+# has an appearance is never touched. greeter.toml, the admin's declarative
+# file, is only created when missing, with hide_logo: the login screen shows
+# PyreOS, not Noctalia's logo. Sync never sets that key, so it overrides nothing.
+since=2
+
+greeter_dir="$PYRE_ROOT/var/lib/noctalia-greeter"
+sync_file="$greeter_dir/sync.toml"
+greeter_file="$greeter_dir/greeter.toml"
+ember="$PYRE_ROOT/usr/share/pyre/themes/ember"
+
+# applies: the greeter and the Ember theme are installed.
+applies() {
+  [[ -x "$PYRE_ROOT/usr/bin/noctalia-greeter" && -f "$ember/palette.json" ]]
+}
+
+check() {
+  applies || return 0
+  [[ -f "$greeter_file" && -f "$sync_file" ]] && grep -q '^\[appearance' "$sync_file"
+}
+
+# role KEY: a dark-variant color from Ember's palette.json (format 2, as
+# tools/ember-palette writes it: one role per line, four spaces in).
+role() {
+  sed -n "s/^    \"$1\": \"\\(#[0-9a-f]\\{6\\}\\)\",\\{0,1\\}\$/\\1/p" "$ember/palette.json" | head -n 1
+}
+
+apply() {
+  mkdir -p -- "$greeter_dir"
+  if [[ ! -f "$greeter_file" ]]; then
+    printf '%s\n' '# noctalia-greeter greeter.toml: yours to edit; it wins over sync.toml.' \
+      '# Created by PyreOS (pyre reconcile, ADR 0015).' '[appearance]' 'hide_logo = true' >"$greeter_file"
+    own "$greeter_file"
+  fi
+  [[ -f "$sync_file" ]] && grep -q '^\[appearance' "$sync_file" && return 0
+  seed_sync
+}
+
+own() {
+  if (( EUID == 0 )) && getent passwd greeter >/dev/null; then
+    chown greeter:greeter -- "$greeter_dir" "$1"
+  fi
+  chmod 644 -- "$1"
+}
+
+seed_sync() {
+  local greeter_key palette_key value wallpaper block
+  block=$'\n# Seeded by PyreOS (pyre reconcile, ADR 0015): Ember until you sync your own look.\n[appearance]\nscheme = "Synced"\ntheme_mode = "dark"\n\n[appearance.palette]\n'
+  # The greeter's role names, then Noctalia's where they differ.
+  for greeter_key in error hover on_error on_hover on_primary on_secondary on_surface on_surface_variant \
+    on_tertiary outline primary secondary shadow surface surface_variant tertiary; do
+    case "$greeter_key" in
+      outline) palette_key=outline_variant ;;
+      surface_variant) palette_key=surface_container ;;
+      *) palette_key="$greeter_key" ;;
+    esac
+    value="$(role "$palette_key")"
+    [[ -n "$value" ]] || { echo "pyre: Ember's palette has no $palette_key" >&2; return 1; }
+    block+="$greeter_key = \"$value\""$'\n'
+  done
+  wallpaper="$(sed -n 's/^wallpaper *= *"\(.*\)"$/\1/p' "$ember/theme.toml" | head -n 1)"
+  block+=$'\n[appearance.wallpaper]\n'"fill_color = \"$(role surface)\""$'\nfill_mode = "crop"\n'
+  [[ -z "$wallpaper" ]] || block+="path = \"${ember#"$PYRE_ROOT"}/$wallpaper\""$'\n'
+  printf '%s' "$block" >>"$sync_file"
+  own "$sync_file"
+}

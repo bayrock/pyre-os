@@ -49,7 +49,9 @@ ADR 0005 already requires that "the theme system must drive Noctalia's palette, 
   - `pyre-install` adds the `plymouth` initramfs hook (after `kms`, before `sd-encrypt`), selects the theme, and puts `quiet splash` at the front of the kernel command line.
   - Existing systems keep their hook list, which belongs to the admin. They opt in with the hook and `plymouth-set-default-theme -R pyre`.
   - Plymouth falls back to text mode whenever a serial console is configured, which is why the VM tests stay in text mode unless they pass `plymouth.ignore-serial-consoles`.
-  - The ISO's menus follow the same rule.
+  - **The login screen:** `noctalia-greeter` shows Noctalia's own look until someone syncs theirs. The system reconcile unit `002-greeter-appearance` seeds Ember once into `/var/lib/noctalia-greeter/sync.toml`, the file Noctalia's sync replaces: the palette from `palette.json` and the theme's wallpaper. A synced look then simply wins.
+  - It creates `greeter.toml`, the admin's file, only when missing, and only with `hide_logo = true`. Sync never sets that key, so the file overrides nothing a user syncs.
+  - **The ISO's BIOS menu** uses the cabin splash and Ember's colors (`iso/UPSTREAM.md`).
 
 ## Consequences
 

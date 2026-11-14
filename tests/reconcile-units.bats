@@ -109,3 +109,35 @@ EOF
   [ -d "$XDG_STATE_HOME/pyre/theme" ]
   [ "$(cat "$XDG_STATE_HOME/pyre/theme/current")" = ember ]
 }
+
+@test "system/002-greeter-appearance seeds Ember into a sync.toml without an appearance, once" {
+  mkdir -p "$PYRE_ROOT/usr/bin" "$PYRE_ROOT/usr/share/pyre/themes" "$PYRE_ROOT/var/lib/noctalia-greeter"
+  printf '#!/bin/sh\n' >"$PYRE_ROOT/usr/bin/noctalia-greeter"
+  chmod +x "$PYRE_ROOT/usr/bin/noctalia-greeter"
+  cp -r "$repo/themes/." "$PYRE_ROOT/usr/share/pyre/themes/"
+  sync="$PYRE_ROOT/var/lib/noctalia-greeter/sync.toml"
+  printf '[session]\nlast = "Niri"\n' >"$sync"
+
+  converge_twice "$repo/src/cli/reconcile/system/002-greeter-appearance"
+  grep -qx 'last = "Niri"' "$sync"
+  grep -qx 'scheme = "Synced"' "$sync"
+  grep -qx 'primary = "#d9803c"' "$sync"
+  grep -qx 'outline = "#564335"' "$sync"
+  grep -qx 'surface_variant = "#251c16"' "$sync"
+  grep -qx 'path = "/usr/share/pyre/themes/ember/wallpapers/ember.jpg"' "$sync"
+  [ "$(grep -c '^\[appearance\]$' "$sync")" -eq 1 ]
+  grep -qx 'hide_logo = true' "$PYRE_ROOT/var/lib/noctalia-greeter/greeter.toml"
+  python3 -I -c 'import sys, tomllib; d = tomllib.load(open(sys.argv[1], "rb")); assert len(d["appearance"]["palette"]) == 16' "$sync"
+}
+
+@test "system/002-greeter-appearance leaves a synced look alone, and holds without the greeter" {
+  mkdir -p "$PYRE_ROOT/usr/bin" "$PYRE_ROOT/usr/share/pyre/themes" "$PYRE_ROOT/var/lib/noctalia-greeter"
+  cp -r "$repo/themes/." "$PYRE_ROOT/usr/share/pyre/themes/"
+  ( source "$repo/src/cli/reconcile/system/002-greeter-appearance"; check )
+  printf '#!/bin/sh\n' >"$PYRE_ROOT/usr/bin/noctalia-greeter"
+  chmod +x "$PYRE_ROOT/usr/bin/noctalia-greeter"
+  printf '[appearance]\nscheme = "Noctalia"\n' >"$PYRE_ROOT/var/lib/noctalia-greeter/sync.toml"
+  printf '[user]\ndefault = "alice"\n' >"$PYRE_ROOT/var/lib/noctalia-greeter/greeter.toml"
+  ( source "$repo/src/cli/reconcile/system/002-greeter-appearance"; check )
+  [ "$(cat "$PYRE_ROOT/var/lib/noctalia-greeter/greeter.toml")" = "$(printf '[user]\ndefault = "alice"')" ]
+}
