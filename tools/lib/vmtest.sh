@@ -101,16 +101,27 @@ send_keys() {
   "$repo_root/tools/vm-ctl" --name "$name" sendkey "$@"
 }
 
+# doubled TEXT: a pattern for TEXT that still matches when the serial log
+# shows one of its characters twice, which it now and then does to the
+# guest's output ("E2E-END-snapsshot-cmdline" ended a run on 2026-11-14).
+doubled() {
+  local text="$1" out="" i
+  for ((i = 0; i < ${#text}; i++)); do out+="${text:i:1}+"; done
+  printf '%s\n' "$out"
+}
+
 # probe NAME 'COMMANDS': run COMMANDS in the root shell on the serial console
-# and print their output.
+# and print their output. NAME is letters, digits and dashes.
 probe() {
-  local tag="$1" commands="$2"
+  local tag="$1" commands="$2" begin end
+  begin="$(doubled "E2E-BEGIN-$tag")"
+  end="$(doubled "E2E-END-$tag")"
   # Output goes through cat, so tools such as pacman see no terminal and print
   # no colors; a process substitution keeps the commands in this shell, where
   # earlier probes defined helpers.
   serial_keys "{ echo; echo E2E-BEGIN-$tag; $commands; echo E2E-END-$tag; } > >(cat) 2>&1"$'\n'
-  wait_for "^E2E-END-$tag" 300 || die "probe $tag did not finish"
-  sed -n "/^E2E-BEGIN-$tag/,/^E2E-END-$tag/p" "$log" | tr -d '\r' | sed '1d;$d'
+  wait_for "^$end" 300 || die "probe $tag did not finish"
+  sed -n -E "/^$begin/,/^$end/p" "$log" | tr -d '\r' | sed '1d;$d'
 }
 
 # expect NAME 'COMMANDS' REGEX: probe and require REGEX in the output.
@@ -125,6 +136,12 @@ expect() {
 # console and become root in a shell without line editing or echo, so typed
 # probes never show up in the output.
 unlock_and_login() {
+  unlock_luks
+  serial_login
+}
+
+# unlock_luks: type the passphrase when the boot asks for it.
+unlock_luks() {
   local try
   # With the boot splash (quiet splash), the kernel log may be off the serial
   # console, but the passphrase request is always echoed there.
@@ -137,7 +154,6 @@ unlock_and_login() {
     (( try < 3 )) || die "LUKS did not unlock"
   done
   pass "LUKS unlocked"
-  serial_login
 }
 
 # serial_login: at the serial getty, log in and become root in a shell
@@ -162,22 +178,81 @@ serial_login() {
   probe quiet-console 'dmesg -n 1' >/dev/null
 }
 
+# --- local packages (development runs before an ISO rebuild) --------------------
+# With local_packages=1 (a tool's --local-packages), an install uses the newest
+# build of every PyreOS package in build/repo instead of the ISO's own.
+local_packages=0
+
+# stage_local_packages: copy those packages into the share, with the script
+# that adds them to the live medium's offline repository and installs the
+# newest pyre-installer into the live system.
+stage_local_packages() {
+  local dir="$vm_dir/share/pkgs" file base
+  local -A newest=()
+  rm -rf -- "$dir"
+  mkdir -p -- "$dir"
+  while IFS= read -r file; do
+    base="${file##*/}"
+    base="${base%.pkg.tar.zst}"
+    base="${base%-*}"; base="${base%-*}"; base="${base%-*}"
+    newest[$base]="$file"
+  done < <(find "$repo_root/build/repo" -maxdepth 1 -name 'pyre-*.pkg.tar.zst' | sort -V)
+  [[ -n "${newest[pyre-installer]:-}" ]] || die "no pyre-installer in build/repo; run tools/build-pkgs"
+  for file in "${newest[@]}"; do
+    cp -- "$file" "$dir/"
+    [[ -f "$file.sig" ]] && cp -- "$file.sig" "$dir/"
+  done
+  cat >"$dir/use-local.sh" <<'EOF'
+#!/bin/bash
+# Written by tools/lib/vmtest.sh. The host's newest PyreOS packages replace
+# the live medium's own in its offline repository and its installer.
+set -euo pipefail
+cd /opt/pyre-offline
+cp -- /run/share/pkgs/*.pkg.tar.zst* .
+[[ -e pyre.db.tar.zst ]] || cp -- pyre.db pyre.db.tar.zst
+repo-add -q pyre.db.tar.zst /run/share/pkgs/*.pkg.tar.zst
+[[ -L pyre.db ]] || cp -f -- pyre.db.tar.zst pyre.db
+pacman -U --noconfirm /run/share/pkgs/pyre-installer-*.pkg.tar.zst
+EOF
+}
+
+# use_local_packages: run that script in the live medium's root shell (tty1).
+# shellcheck disable=SC2016 # typed into the guest verbatim.
+use_local_packages() {
+  type_keys 'mkdir -p /run/share && mount -t 9p -o trans=virtio pyre-share /run/share && bash /run/share/pkgs/use-local.sh > /dev/ttyS0 2>&1; rc=$?; echo > /dev/ttyS0; echo E2E-LOCAL-EXIT=$rc > /dev/ttyS0'$'\n'
+  wait_for '^E2E-LOCAL-EXIT=' 180 || die "the local packages were not set up"
+  grep -qa '^E2E-LOCAL-EXIT=0' "$log" || die "the local packages were not set up (see the serial log)"
+  pass "local packages from build/repo: $(find "$vm_dir/share/pkgs" -name '*.pkg.tar.zst' -printf '%f\n' | sed 's/-any\.pkg\.tar\.zst$//' | sort | paste -sd' ')"
+}
+
 # install_from_iso ISO [LINE...]: an unattended offline install from ISO, with
-# the fixed test settings plus each extra config LINE; then power off.
+# the fixed test settings plus each extra config LINE; then power off. A tool
+# may set install_prelude, a command line typed into the live root shell just
+# before the installer, and install_timeout (seconds).
+install_prelude=""
+install_timeout=1800
 install_from_iso() {
   local iso="$1" line
   shift
+  (( local_packages )) && stage_local_packages
   start_vm install --fresh "$iso"
   wait_for 'archiso login:' 240 || die "the live medium did not boot"
   sleep 5
+  (( local_packages )) && use_local_packages
   for line in 'disk = "/dev/vda"' 'erase_disk = true' "username = \"$user\"" "password = \"$password\"" \
     "luks_passphrase = \"$passphrase\"" "hostname = \"$hostname\"" "kernel_params = \"$kernel_params\"" "$@"; do
     type_keys "echo '$line' >> /root/e2e.toml"$'\n'
   done
+  [[ -z "$install_prelude" ]] || type_keys "$install_prelude"$'\n'
   type_keys "pyre-install --config /root/e2e.toml > /dev/ttyS0 2>&1; echo E2E-INSTALL-EXIT=\$? > /dev/ttyS0"$'\n'
-  wait_for '^E2E-INSTALL-EXIT=' 1800 || die "pyre-install did not finish"
+  wait_for '^E2E-INSTALL-EXIT=' "$install_timeout" || die "pyre-install did not finish"
   grep -qa '^E2E-INSTALL-EXIT=0' "$log" || die "pyre-install failed (see serial-install.log)"
   pass "pyre-install --config (offline)"
+  # pacman reports a failed hook this way and carries on.
+  if grep -qa 'command failed to execute correctly' "$log"; then
+    die "a pacman hook failed during the install (see serial-install.log)"
+  fi
+  pass "no pacman hook failed"
   power_off keyboard
 }
 

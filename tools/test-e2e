@@ -3,9 +3,10 @@
 # unattended install, LUKS unlock, login, the daily-interaction desktop
 # checklist with screendumps, a snap-pac pre/post pair, booting that snapshot
 # from Limine, and rolling back to it.
-# Usage: tools/test-e2e [--from STAGE] [ISO]   (default: newest build/out/pyreos-*.iso)
+# Usage: tools/test-e2e [--from STAGE] [--local-packages] [ISO]   (default: newest build/out/pyreos-*.iso)
 # Stages: install, first-boot, desktop, snapshot-boot, rollback. --from resumes on the
-# disk a previous run left in build/vm/test-e2e/ (development only).
+# disk a previous run left in build/vm/test-e2e/ (development only). --local-packages
+# installs the newest PyreOS packages in build/repo instead of the ISO's own.
 # Evidence: build/vm/test-e2e/serial-<stage>.log, desktop-*.png, and a
 # screendump per failure.
 set -euo pipefail
@@ -20,12 +21,17 @@ source "$repo_root/tools/lib/vmtest.sh"
 pyre_repo=http://10.0.2.2:8080/repo
 
 from=install
-case "${1:-}" in
-  -h|--help) sed -n '2,8s/^# //p' "${BASH_SOURCE[0]}"; exit 0 ;;
-  --from) from="${2:?--from needs a stage}"; shift 2 ;;
-esac
+iso=""
+while (( $# )); do
+  case "$1" in
+    -h|--help) sed -n '2,9s/^# //p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --from) from="${2:?--from needs a stage}"; shift 2 ;;
+    --local-packages) local_packages=1; shift ;;
+    -*) echo "test-e2e: unknown option: $1" >&2; exit 2 ;;
+    *) iso="$1"; shift ;;
+  esac
+done
 case "$from" in install|first-boot|desktop|snapshot-boot|rollback) ;; *) echo "test-e2e: unknown stage: $from" >&2; exit 2 ;; esac
-iso="${1:-}"
 if [[ -z "$iso" ]]; then
   iso="$(find "$repo_root/build/out" -maxdepth 1 -name 'pyreos-*.iso' -printf '%T@ %p\n' 2>/dev/null |
     sort -n | tail -n 1 | cut -d' ' -f2-)"

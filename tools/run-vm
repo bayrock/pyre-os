@@ -17,6 +17,7 @@ display="gtk"
 boot_from=""
 net=1
 outputs=1
+disk2=""
 iso=""
 
 usage() {
@@ -31,6 +32,7 @@ Options:
   --fresh            Recreate the VM's disk and UEFI variables before booting
   --no-disk          Do not attach a disk (live ISO only)
   --disk-size SIZE   Size for a newly created disk (default: 40G)
+  --disk2 FILE       Attach a raw image under build/ as a second disk (vdb)
   --memory MIB       Guest memory in MiB (default: 4096)
   --cpus N           Guest vCPUs (default: 4)
   --display MODE     gtk (GL window, default) | sdl | headless (GL, no window) | none (no GL)
@@ -67,6 +69,7 @@ while [[ $# -gt 0 ]]; do
     --boot-disk) boot_from="disk"; shift ;;
     --no-net) net=0; shift ;;
     --outputs) outputs="${2:?--outputs needs a value}"; shift 2 ;;
+    --disk2) disk2="${2:?--disk2 needs a file}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     -*) die "unknown option: $1 (see --help)" ;;
     *) [[ -z "$iso" ]] || die "only one ISO may be given"; iso="$1"; shift ;;
@@ -82,6 +85,12 @@ case "$display" in gtk|sdl|headless|none) ;; *) die "unknown display mode: $disp
 if [[ -n "$iso" ]]; then
   [[ -f "$iso" ]] || die "ISO not found: $iso"
   iso="$(realpath -- "$iso")"
+fi
+
+if [[ -n "$disk2" ]]; then
+  [[ -f "$disk2" ]] || die "second disk not found: $disk2"
+  disk2="$(realpath -- "$disk2")"
+  [[ "$disk2" == "$repo_root/build/"* ]] || die "the second disk must be an image under build/: $disk2"
 fi
 
 command -v qemu-system-x86_64 >/dev/null 2>&1 || die "qemu-system-x86_64 not found; install qemu-desktop (see docs/BUILDING.md)"
@@ -107,6 +116,10 @@ fi
 args=(
   -name "$name"
   -machine "q35,accel=kvm"
+  # q35's TCO watchdog resets the guest unless a driver disarms it. A kernel
+  # that boots only to resume from hibernation never loads that driver, so the
+  # resumed system was reset seconds later; strap the watchdog to never reboot.
+  -global "ICH9-LPC.noreboot=true"
   -cpu host
   -smp "$cpus"
   -m "$memory"
@@ -145,6 +158,10 @@ if [[ "$use_disk" -eq 1 ]]; then
     qemu-img create -q -f qcow2 "$disk" "$disk_size"
   fi
   args+=(-drive "file=$disk,if=virtio,format=qcow2,discard=unmap")
+fi
+
+if [[ -n "$disk2" ]]; then
+  args+=(-drive "file=$disk2,if=virtio,format=raw")
 fi
 
 if [[ -n "$iso" ]]; then

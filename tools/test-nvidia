@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2016 # probes are typed into the guest verbatim
+# The NVIDIA path of an install, in a VM that has no NVIDIA GPU: HW_SYS shows
+# "pyre hw" an RTX 3060 Ti, so pyre-install does what it will do on such a
+# machine. Everything but the GPU itself is real:
+#   install     the rule's packages come from the ISO's offline repository,
+#               and DKMS builds the open modules for both kernels inside the
+#               installer's chroot
+#   first-boot  no snapshots from the install; the modules are in both
+#               initramfs images and the drop-ins are in place; the system
+#               still boots and unlocks; a second apply changes nothing; an
+#               apply without the GPU removes the drop-ins
+# The desktop is not started: it cannot run on a GPU that is not there.
+# Usage: tools/test-nvidia [--from first-boot] [--local-packages] [ISO]
+#   --local-packages   use the newest PyreOS packages in build/repo instead of
+#                      the ISO's own (before an ISO rebuild)
+# Evidence: build/vm/test-nvidia/serial-<stage>.log
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+tool=test-nvidia
+name=test-nvidia
+# shellcheck source=tools/lib/vmtest.sh
+source "$repo_root/tools/lib/vmtest.sh"
+
+from=install
+iso=""
+while (( $# )); do
+  case "$1" in
+    -h|--help) sed -n '3,17s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --from) from="${2:?--from needs a stage}"; shift 2 ;;
+    --local-packages) local_packages=1; shift ;;
+    -*) echo "$tool: unknown option: $1" >&2; exit 2 ;;
+    *) iso="$1"; shift ;;
+  esac
+done
+case "$from" in install|first-boot) ;; *) echo "$tool: unknown stage: $from" >&2; exit 2 ;; esac
+if [[ -z "$iso" ]]; then
+  iso="$(find "$repo_root/build/out" -maxdepth 1 -name 'pyreos-*.iso' -printf '%T@ %p\n' 2>/dev/null |
+    sort -n | tail -n 1 | cut -d' ' -f2-)"
+fi
+[[ -n "$iso" && -f "$iso" ]] || { echo "$tool: no ISO found; build one with sudo tools/build-iso" >&2; exit 1; }
+
+# The fake GPU: one PCI function with the RTX 3060 Ti's ids, in a directory
+# of the target that the rules read instead of /sys. The target does not exist
+# until archinstall has made it, so a background loop in the live shell adds
+# the directory as soon as pyre-cli is installed, long before the hardware step.
+fake_sys=/var/lib/pyre-test/sys
+install_prelude="export HW_SYS=$fake_sys; (until [ -d /mnt/usr/share/pyre/hw ]; do sleep 2; done; d=/mnt$fake_sys/bus/pci/devices/0000:01:00.0; mkdir -p \$d; echo 0x10de > \$d/vendor; echo 0x24c9 > \$d/device; echo 0x030000 > \$d/class) &"
+install_timeout=3600
+
+stage_install() {
+  install_from_iso "$iso"
+  grep -qa 'hardware rules: nvidia-open-dkms nvidia-utils libva-nvidia-driver linux-headers linux-lts-headers' "$vm_dir/serial-install.log" ||
+    die "the installer did not apply the NVIDIA rule (see serial-install.log)"
+  pass "the installer applied the NVIDIA rule"
+}
+
+stage_first_boot() {
+  start_vm first-boot --boot-disk --display none
+  unlock_and_login
+  # The driver transaction ran after snap-pac was installed; like the rest of
+  # the installation it left no snapshots (only snapper's "current" line).
+  expect no-install-snapshots 'snapper -c root list --columns number | tail -n +3 | wc -l' '^1$'
+  expect dkms-both-kernels 'dkms status | grep -c "^nvidia/.*: installed"' '^2$'
+  expect modules-built 'ls /usr/lib/modules/*/updates/dkms/nvidia-drm.ko* | wc -l' '^2$'
+  expect initramfs-modules 'for k in linux linux-lts; do lsinitcpio /boot/$(cat /etc/machine-id)/$k/initramfs | grep -c "/nvidia\(-modeset\|-uvm\|-drm\)\?\.ko"; done | tr "\n" " "; echo' '^4 4 $'
+  # How much of the 2 GiB ESP the larger initramfs images take (STATUS, "Sizes").
+  probe sizes 'du -sm /boot/$(cat /etc/machine-id)/*/initramfs | tr "\t" " "; df -m --output=used,size,pcent /boot | tail -n 1' | sed 's/^/     | /'
+  expect modules-dropin 'cat /etc/mkinitcpio.conf.d/50-pyre-hw.conf | tail -n 1' '^MODULES\+=\(nvidia nvidia_modeset nvidia_uvm nvidia_drm\)$'
+  expect cmdline 'grep -c "nvidia_drm.modeset=1" /proc/cmdline' '^1$'
+  expect rule-files 'ls /etc/nvidia/nvidia-application-profiles-rc.d/50-pyre-niri.json /etc/environment.d/50-pyre-nvidia.conf | wc -l' '^2$'
+  expect nouveau-blacklisted 'modprobe --showconfig | grep -c "^blacklist nouveau$"' '^[1-9]'
+  # No GPU answers, so the module refuses to load; the boot went on regardless.
+  expect module-tried 'journalctl -b -k -o cat | grep -c -i -e "NVRM" -e "nvidia: loading out-of-tree module" -e "nvidia: module verification"' '^[1-9]'
+  expect boot-reached 'systemctl is-active multi-user.target' '^active$'
+  expect apply-again 'HW_SYS='"$fake_sys"' pyre hw apply --no-packages 2>&1 | tail -n 1' 'boot files unchanged'
+  # Without the GPU (the real /sys of this VM), the drop-ins go away again.
+  expect apply-without-gpu 'pyre hw apply --no-packages >/var/log/test-nvidia-apply.log 2>&1; echo rc=$?' '^rc=0$'
+  expect dropins-removed 'ls /etc/mkinitcpio.conf.d/50-pyre-hw.conf /etc/limine-entry-tool.d/50-pyre-hw.conf /etc/environment.d/50-pyre-nvidia.conf 2>/dev/null | wc -l' '^0$'
+  expect cmdline-clean 'grep -c "nvidia_drm.modeset=1" /boot/limine.conf || true' '^0$'
+  expect pyre-doctor 'pyre doctor --boot 2>&1 | tail -n 1' '^pyre doctor: no failures$'
+  power_off
+}
+
+stages=(install first-boot)
+running=0
+for name_ in "${stages[@]}"; do
+  [[ "$name_" == "$from" ]] && running=1
+  (( running )) || { printf '== %s (skipped)\n' "$name_"; continue; }
+  "stage_${name_//-/_}"
+done
+printf '\n%s: all stages passed\n' "$tool"

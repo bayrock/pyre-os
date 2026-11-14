@@ -83,6 +83,10 @@ tools/test-e2e     # the P2 and P3 scenarios: offline install, unlock, desktop c
                    # snapshot pair, snapshot boot, rollback
 tools/test-upgrade # the P4 scenario: N-1 -> N upgrade with pyre update, then a broken
                    # update rolled back to a working desktop
+tools/test-machine # the P6 scenario: the interactive installer next to a Windows disk,
+                   # hibernation, the Windows boot entry, three outputs, suspend
+tools/test-nvidia  # an install with an NVIDIA GPU shown to the hardware rules: the
+                   # driver builds in the installer's chroot and the system boots
 ```
 
 `tools/test-upgrade` builds releases N and N+1 under `build/upgrade/`: every PyreOS package gets `pkgrel` raised and a canary reconcile unit per scope, and N+1 also breaks the greeter. It serves them on `127.0.0.1:8080`, where the guest's `[pyre]` points. Its stages share `tools/lib/vmtest.sh` with `test-e2e`.
@@ -102,6 +106,17 @@ Evidence:
 
 The test credentials are fixed and not secret.
 
+`tools/test-machine` covers what the development machine needs and `test-e2e` does not take (ADR 0017), on its own `build/vm/test-machine/` disk:
+
+1. **install:** the interactive installer, typed at the keyboard one prompt at a time, with autologin and hibernation. The target disk already holds an older system (an MBR table, a FAT partition and a LUKS volume), as the development machine's does. A second disk (`run-vm --disk2`) plays the Windows disk: a GPT with an ESP whose `EFI/Microsoft/Boot/bootmgfw.efi` is the host's systemd-boot. Each prompt is captured (`share/tui-*.png`).
+2. **first-boot:** the answers took effect; the swapfile, its subvolume and the resume arguments; the Windows entry, below PyreOS and still there after a transaction; no keyring dialog under autologin; three outputs with one portrait; suspend, wake (`system_wakeup`), and the lock; a power-off within seconds.
+3. **hibernate:** hibernate, power off, boot, unlock, and the same root shell and niri answer again. It runs without GL: after a hibernation QEMU is a new process, and a GL guest's host-side resources are gone with the old one.
+4. **chainload:** the Windows entry starts the other disk's boot manager. The Windows disk's checksum never changes.
+
+`tools/test-nvidia` installs with `HW_SYS` pointing `pyre hw` at a directory that holds one PCI function with an RTX 3060 Ti's ids, so the installer takes the NVIDIA rule's path on a VM without the GPU: the packages from the offline repository, the DKMS build for both kernels in the chroot, the modules in both initramfs images. The first boot checks them, that the system still boots, and that an apply without the GPU removes the drop-ins. The desktop is not started.
+
+**Before an ISO rebuild**, `--local-packages` on `test-e2e`, `test-machine` or `test-nvidia` uses the newest PyreOS packages in `build/repo`: they replace the ISO's own in the live medium's offline repository and its installer, so the install is still offline and the installed system gets them too.
+
 **Why the desktop screenshots come from niri.** niri refuses software rendering, so the desktop needs virgl. QEMU 11 cannot `screendump` a virgl scanout ("no surface"), so the harness takes niri screenshots in the guest and copies them out through the 9p share. niri does not screenshot the lock screen, so the lock checks use Noctalia's and logind's lock state instead.
 
 For manual work:
@@ -114,6 +129,7 @@ tools/run-vm --display headless --outputs 2 --boot-disk     # GL with no window,
 tools/run-vm --boot-disk                                    # boot the installed disk
 tools/run-vm --no-net ...                                   # no network device (offline installs)
 tools/run-vm --fresh ...                                    # wipe this VM's disk and UEFI vars first
+tools/run-vm --disk2 build/vm/NAME/other.img ...            # a second disk (vdb) from a raw image under build/
 ```
 
 While a VM runs, control it from another terminal:
