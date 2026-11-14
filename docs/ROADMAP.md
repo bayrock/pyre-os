@@ -44,7 +44,7 @@ Phases run in order. A phase is accepted only when its exit criteria pass with e
   - every reconcile unit's test shows that a second run is a no-op
   - a deliberately broken update can be rolled back to a working desktop
 
-## P5: Polish and identity (in review)
+## P5: Polish and identity (accepted 2026-11-14)
 
 - Build the theme system on Noctalia's palettes and templates (ADR 0015), with `pyre theme`.
 - Ship the "Ember" default theme plus curated alternatives.
@@ -52,7 +52,7 @@ Phases run in order. A phase is accepted only when its exit criteria pass with e
 - Add a welcome/onboarding flow and user documentation.
 - **Exit when:** switching themes updates every covered app live, and a full visual review passes from boot splash to lock screen.
 
-## P6: Daily driver on the development machine
+## P6: Daily driver on the development machine (next)
 
 - Cover the hardware and setup on the development machine:
   - an NVIDIA RTX 3060 Ti

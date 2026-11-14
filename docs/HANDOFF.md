@@ -1,21 +1,21 @@
 # Handoff
 
-## Next task: P5, polish and identity (in progress)
+## Next task: P6, daily driver on the development machine
 
-**P5 is built and in review (2026-11-14).** Every P5 item is done: four themes (Ember, Birch, Evergreen, Frost), boot branding, the welcome panel (ADR 0016) and the user guide (`docs/guide/`). `tools/test-theme` and `tools/test-visual` pass (see STATUS). To accept P5:
-- The user reviews the captures in `build/vm/test-visual/share/` and signs off.
-- Done: the ISO built on 2026-11-14 passes `tools/test-iso` (UEFI and BIOS, the Ember BIOS menu) and `tools/test-e2e` (93 checks).
+P5 was accepted on 2026-11-14 (STATUS). P6 is in `docs/ROADMAP.md`; the machine is described in `docs/reference/dev-machine.md`. It is the first phase on real hardware, and the host is the user's working desktop, so **every step that touches the host's boot setup, disks or desktop config needs the user**: the agent plans, builds and tests in VMs, and the user runs the host steps.
 
-1. **The release key: done on 2026-11-13** (`docs/reference/release-key.md`). The primary key is offline, the subkey is in the Actions secret `PYRE_SIGNING_SUBKEY`, and `pyre-keyring` 0.2.0 trusts it alongside the dev key. Release images drop the dev key in P7.
-2. **The testing channel: live on 2026-11-13** (`docs/BUILDING.md`, "The testing channel"). Every push to `main` publishes signed packages to the `testing` release, and `pyre-release` 0.3.0 points installed systems at it. **Any package change needs a `pkgver`/`pkgrel` bump**, or the publish job fails. `tools/test-channel` checks that an installed VM updates from it.
-3. **P5 theme system: started on 2026-11-13** (ADR 0015). A theme is a Noctalia palette in `themes/<id>/`, shipped by `pyre-themes`. Ember comes from the landing page. Noctalia's built-in templates color niri, foot, GTK 3/4 and btop, and `pyre theme` lists and sets themes. `tools/test-theme` (VM) passes. Next in P5:
-   - Done: the Ember wallpaper (`tools/render-wallpaper`), live recolor of open foot and GTK windows (`pyre theme refresh`), the Limine boot menu (`pyre-boot-branding`), and the Plymouth splash (`tools/test-splash`).
-   - Done too: the ISO's BIOS menu (the cabin splash and Ember's `MENU COLOR`s, `iso/UPSTREAM.md` item 9).
-   - Done too: the login screen (Ember seeded until someone syncs, no Noctalia logo). Boot branding is complete: Limine, Plymouth, the ISO's BIOS menu and the greeter all wear Ember (ADR 0015).
-   - Next in P5: curated alternative themes (license-checked palettes), the welcome flow, and user documentation. Then the P5 exit review: a full visual pass from boot splash to lock screen.
-   - Curated alternative themes (license-checked palettes), and the welcome flow and user docs.
-4. **Optional: install images.** Publishing the ISO to the `testing` release (CI needs a privileged container for mkarchiso, and the 3.7 GB image is over GitHub's 2 GiB per-asset limit, so it must be split or slimmed) would unlock the landing page's "Install" pill. The pill waits for install images, not packages (`landing/README.md`).
-5. **Landing page:** live at <https://bayrock.github.io/pyre-os/> (Pages source: GitHub Actions).
+Suggested order:
+1. **A P6 plan with the user:** what can be proven in VMs first, and the migration's order and safety net (a verified home backup and a recovery USB for the current system before anything is installed).
+2. **Gaps that VMs can close first** (STATUS, "Carried over"): the hibernation swapfile option in the installer, Windows chainload detection (`FIND_BOOTLOADERS=yes`), three outputs with one portrait (`run-vm --outputs 3`), and the interactive gum TUI, which only `--config` has exercised.
+3. **Real hardware:** `pyre hw` against the RTX 3060 Ti (`nvidia-open-dkms`), VRR at 240 Hz, suspend and hibernate, the peripherals, Bluetooth.
+4. **The author's overlay repo** (keybind extras, monitor layout, fonts, the personal Quickshell toys; ADR 0005), kept out of distribution defaults.
+5. **Migrate**, then a week of daily use with issues logged (the exit criterion).
+
+Standing facts:
+- **The testing channel** (`docs/BUILDING.md`): every push to `main` publishes signed packages, so **any package change needs a `pkgver`/`pkgrel` bump**; `tools/check` runs `tools/check-bumps`. The release key's subkey is in the Actions secret `PYRE_SIGNING_SUBKEY` (`docs/reference/release-key.md`).
+- **Install images** are not published yet. CI needs a privileged container for mkarchiso, and the ISO is over GitHub's 2 GiB per-asset limit. They unlock the landing page's "Install" pill (P7, or earlier if wanted).
+- **Brand assets:** `docs/images/` (wordmark, preview, avatar; `tools/render-avatar`), the landing page at <https://bayrock.github.io/pyre-os/>. Themes and wallpapers come from `tools/theme-palettes` and `tools/render-wallpaper`.
+- **VM tests:** `tools/test-e2e`, `test-iso`, `test-upgrade`, `test-channel`, `test-theme`, `test-splash`, `test-visual` (each prints its usage with `--help`). Boot surfaces are captured only without GL (`--display none`); niri skips software renderers, so desktop captures need GL and come from niri's own screenshots.
 
 ## Dev loop reference
 

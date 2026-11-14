@@ -4,7 +4,7 @@ Last updated: 2026-11-14
 
 ## Current phase
 
-**P5, polish and identity (in progress).** P4 was accepted on 2026-11-13, and the hosted testing channel went live the same day. P5 started the same evening with the theme system (ADR 0015). By 2026-11-14 every P5 item is built: four themes, boot branding, the welcome panel (ADR 0016) and the user guide. What remains is the exit review (`tools/test-visual`, signed off by the user) and an ISO rebuild.
+**P6, daily driver on the development machine (next).** P5 was accepted on 2026-11-14 (below). P6 moves to real hardware: the development machine (`docs/reference/dev-machine.md`), its NVIDIA GPU, three outputs, suspend and hibernate, peripherals, and Windows dual-boot, then the author's overlay repo and the migration itself.
 
 **Carried over** (later phases unless reprioritized):
 
@@ -18,6 +18,12 @@ Last updated: 2026-11-14
 - **From P4:** `pyre hw` has run only against a simulated sysfs, so real GPUs wait for P6. The `-gaming` and `-lazyvim` bundles are deferred. `[pyre]` is hosted on the `testing` channel since 2026-11-13.
 
 ## Accepted phases
+
+**P5: Polish and identity** was accepted on 2026-11-14, by the user after reviewing the `tools/test-visual` captures.
+
+- **Exit run** (ISO `pyreos-2026.11.14-x86_64.iso`, sha256 `e0a8f165…2eb8072a4`): `tools/test-visual` passed, one boot captured from the Limine menu through the splash, the login screen, the welcome panel and its guide, and the desktop in every theme, to a lock and unlock. `tools/test-theme` passed: live recolor of open foot and GTK windows in all four themes, and the welcome panel's theme buttons. `tools/test-iso` passed on UEFI and BIOS, and `tools/test-e2e` passed 93 checks.
+- **Accepted limit:** the lock screen itself is not captured, because niri does not screenshot it (as in P3). The lock is shown by Noctalia's state and logind's LockedHint.
+- **Built:** ADRs 0015 (themes are Noctalia palettes) and 0016 (the welcome panel). Four original themes: Ember, Birch, Evergreen and Frost (`pyre-themes` 0.3.0). The Limine menu, the Plymouth splash, the ISO's BIOS menu and the login screen in Ember (`pyre-base` 0.5.0, `pyre-cli` 0.3.0). The welcome panel, the user guide, the `pyreos` icon and the fastfetch flame (`pyre-desktop` 0.3.1). Brand assets in `docs/images/`. Details are under "Theme system" below.
 
 **P4: Lifecycle** was accepted on 2026-11-13.
 
