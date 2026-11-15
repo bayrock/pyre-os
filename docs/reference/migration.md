@@ -46,15 +46,15 @@ If Windows was hibernated or "fast startup" is on, the NTFS volume mounts read-o
 
 ## 2. The PyreOS USB
 
-The ISO of 2026-11-14 (`build/out/pyreos-2026.11.14-x86_64.iso`) is built, verified and tested (STATUS). Check it once more right before writing it, then write it:
+The ISO of 2026-11-15 (`build/out/pyreos-2026.11.15-x86_64.iso`) is built, verified and tested (STATUS). Check it once more right before writing it, then write it:
 
 ```sh
 tools/verify-iso                                  # the image is still what was built
-sudo dd if=build/out/pyreos-2026.11.14-x86_64.iso of=/dev/sdX bs=4M oflag=sync status=progress
-sudo cmp -n "$(stat -c %s build/out/pyreos-2026.11.14-x86_64.iso)" build/out/pyreos-2026.11.14-x86_64.iso /dev/sdX   # the stick holds it, byte for byte
+sudo dd if=build/out/pyreos-2026.11.15-x86_64.iso of=/dev/sdX bs=4M oflag=sync status=progress
+sudo cmp -n "$(stat -c %s build/out/pyreos-2026.11.15-x86_64.iso)" build/out/pyreos-2026.11.15-x86_64.iso /dev/sdX   # the stick holds it, byte for byte
 ```
 
-After a package change, rebuild first (`tools/build-pkgs && sudo tools/build-iso`) and run `tools/test-iso`, `test-e2e`, `test-machine` and `test-nvidia` again.
+After a change to the installer or to what the ISO carries, rebuild first (`tools/build-pkgs && sudo tools/build-iso`) and run `tools/test-iso`, `test-e2e`, `test-machine`, `test-nvidia` and `test-dev` again. Other package changes reach the installed machine through `pyre update`.
 
 `/dev/sdX` is the USB stick: check it with `lsblk -o NAME,SIZE,TRAN,MODEL` (`TRAN` is `usb`).
 
@@ -64,12 +64,12 @@ After a package change, rebuild first (`tools/build-pkgs && sudo tools/build-iso
 2. Run `pyre-install`. The disk list shows what each disk holds:
    - **the 120 GB Samsung SSD** ("holds vfat crypto_LUKS") is the target;
    - **the 1 TB NVMe** ("holds ntfs vfat") is Windows. Do not choose it.
-3. Answer yes to autologin and to hibernation (a 16 GiB swapfile). The confirmation names the disk again before anything is erased.
+3. Answer yes to autologin and to hibernation (a 16 GiB swapfile). Give your name and email for git, and answer yes to the development tools: they install from the stick, without a network. The confirmation names the disk and every answer again before anything is erased.
 4. The install log ends with "dual-boot: Windows on /dev/nvme0n1p2 is in the boot menu". Reboot without the stick.
 
 ## 4. First boot on real hardware
 
-Clone the repository, then run `tools/hw-report` and keep its output: it collects what P6 needs to judge (the driver, the outputs and their modes, sleep states, audio, Bluetooth, failed units).
+Run `pyre dev --status`: the git identity and the development tools are there, and `pyre dev` signs in to GitHub. Clone the repository, then run `tools/hw-report` and keep its output: it collects what P6 needs to judge (the driver, the outputs and their modes, sleep states, audio, Bluetooth, failed units).
 
 Then, by hand:
 
