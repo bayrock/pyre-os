@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Check that every package the PyreOS menu's catalog names (ADR 0021) is in
+# Arch's core or extra repository, against this machine's pacman sync
+# databases. Run it on an Arch machine with current lists; it is not part of
+# tools/check, because CI's container has no reason to hold them.
+# Usage: tools/check-catalog
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+catalog="$repo_root/src/cli/menu/catalog.tsv"
+
+case "${1:-}" in
+  "") ;;
+  -h | --help) sed -n '2,6s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
+  *) echo "check-catalog: unknown option: $1" >&2; exit 2 ;;
+esac
+command -v pacman >/dev/null 2>&1 || { echo "check-catalog: pacman not found" >&2; exit 1; }
+pacman -Si pacman >/dev/null 2>&1 || { echo "check-catalog: no sync databases here (pacman -Sy)" >&2; exit 1; }
+
+bad=0 count=0
+while IFS=$'\t' read -r name _ pkgs; do
+  for pkg in $pkgs; do
+    count=$((count + 1))
+    # Asked of core and extra by name: a machine may list another repository
+    # first that carries the same package.
+    pacman -Si -- "core/$pkg" >/dev/null 2>&1 || pacman -Si -- "extra/$pkg" >/dev/null 2>&1 ||
+      { echo "check-catalog: $name: $pkg is not in core or extra" >&2; bad=1; }
+  done
+done < <(grep -v -e '^#' -e '^$' "$catalog")
+(( bad == 0 )) || exit 1
+echo "check-catalog: all $count packages are in core or extra"

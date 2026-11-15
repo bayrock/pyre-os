@@ -16,7 +16,7 @@ Noctalia reads three layers, and the last one wins:
 - Noctalia also merges every other `*.toml` file in `~/.config/noctalia/`.
 - **Whatever the settings window changed wins over both files.** When an edit to `config.toml` seems to do nothing, look in `settings.toml` for the same key first.
 
-For most shell settings the settings window is the right tool, and the user can open it with **Super + Shift + ,**. Edit `config.toml` when the user wants the setting kept in a file, for example in their dotfiles.
+For most shell settings the settings window is the right tool, and the user can open it from the launcher: `shell settings`. Edit `config.toml` when the user wants the setting kept in a file, for example in their dotfiles.
 
 ## Read and change settings
 
@@ -38,6 +38,7 @@ Read `/usr/share/pyre/defaults/noctalia/pyre.toml` for the exact keys. In short:
 - The theme is the custom palette "Ember"; see [`themes.md`](themes.md).
 - The screen locks after 10 minutes idle and the screens turn off a minute later. Noctalia locks before suspend.
 - Night light is off, and its schedule has fixed hours, 20:00 to 07:00, so it needs no location.
+- The launcher has two extra lists, `[shell.launcher.dmenu.entry.pyre]` and `.keys`: the PyreOS menu (`/pyre`, also in the ordinary search) from `pyre menu --list`, and the keys (`/keys`) from `pyre keys --list`.
 - The welcome panel and the launcher's reminders are Noctalia plugins, `pyre/welcome` and `pyre/remind`, loaded from `/usr/share/pyre/noctalia/plugins/`.
 
 To change the idle times in the user's file:
@@ -78,7 +79,7 @@ sunrise = "06:30"
 
 | Command | Does |
 |---|---|
-| `noctalia msg panel-toggle launcher` | Opens or closes a panel: `launcher`, `control-center`, `clipboard`, `session` |
+| `noctalia msg panel-toggle launcher` | Opens or closes a panel: `launcher`, `control-center`, `clipboard`, `session`, `wallpaper`. A word after `launcher` fills in the search: `"/pyre "` is the PyreOS menu, `"/keys "` the key list |
 | `noctalia msg settings-toggle` | The settings window |
 | `noctalia msg session lock` | Locks the screen (`loginctl lock-session` does too) |
 | `noctalia msg notification-dnd-toggle` | Do not disturb |

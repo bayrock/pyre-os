@@ -4,7 +4,7 @@
 # stubs are in defaults/ and skel/ of this repository, so the package is built
 # in place.
 pkgname=pyre-desktop
-pkgver=0.4.0
+pkgver=0.5.0
 pkgrel=1
 pkgdesc='PyreOS desktop: niri, Noctalia, session services, default apps and defaults'
 arch=(any)
@@ -14,8 +14,9 @@ depends=(
   pyre-base
   # pyre welcome and the themes' banners, for the welcome panel; pyre remind,
   # for the launcher's reminders (ADR 0020); the agent skill the guide
-  # mentions (ADR 0019)
-  'pyre-cli>=0.4.0'
+  # mentions (ADR 0019); pyre menu and pyre keys, which the launcher and the
+  # keymap call (ADR 0021)
+  'pyre-cli>=0.5.0'
   'pyre-themes>=0.3.0'
   # Session: compositor, shell, greeter, X11 apps, portals
   niri
@@ -35,22 +36,17 @@ depends=(
   bluez
   bluez-utils
   power-profiles-daemon
-  # Default apps
+  # Default apps: a terminal, a browser, a file manager, an editor. The
+  # rest is an optional install in the PyreOS menu (ADR 0021).
   foot
   firefox
   nautilus
   neovim
-  gpu-screen-recorder
-  mpv
-  imv
-  papers
-  # CLI tools
-  bat
+  # CLI tools: the system monitor, and what the default prompt and the menu use
   btop
   eza
   fastfetch
   fzf
-  ripgrep
   starship
   zoxide
   # Desktop plumbing, themes and fonts

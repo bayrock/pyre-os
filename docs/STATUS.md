@@ -4,7 +4,7 @@ Last updated: 2026-11-14
 
 ## Current phase
 
-**P6, daily driver on the development machine (active).** Everything about the machine that needs no real hardware is built and passes in VMs, on the ISO that will be installed. What remains needs the machine itself and its owner: the backups and the install (`docs/reference/migration.md`).
+**P6, daily driver on the development machine (active).** Everything about the machine that needs no real hardware is built and passes in VMs. The ISO is one rebuild behind the packages (below), so the order is: rebuild the ISO, run the four ISO tests, then the owner's backups and install (`docs/reference/migration.md`).
 
 | Step | State | Evidence |
 |---|---|---|
@@ -17,9 +17,10 @@ Last updated: 2026-11-14
 | Autologin keyring (ADR 0018) | Done in the VM | no dialog, `secret-tool` round trip, power-off in seconds |
 | NVIDIA install path | Done in the VM, without the GPU | `tools/test-nvidia`: the rule's packages from the offline repository, DKMS for both kernels in the installer's chroot, the modules in both initramfs images, a normal boot |
 | `pyre hw` on the real GPU | Detection only | read-only on the machine: the RTX 3060 Ti matches `10-nvidia-open` |
-| An ISO with the new packages | Done: `pyreos-2026.11.14-x86_64.iso`, sha256 `0ff3ef15…64064568` | built and verified by `tools/build-iso` (the third build of the day; see below), and the four VM tests below |
+| An ISO with the new packages | **Behind: rebuild before the install.** `pyreos-2026.11.14-x86_64.iso` (sha256 `0ff3ef15…64064568`) passed the four VM tests below, but carries `pyre-cli` 0.3.1 and `pyre-desktop` 0.3.2: the old keymap and default apps, no menu | `tools/build-pkgs && sudo tools/build-iso` (the owner), then the four tests |
 | Agent skill (ADR 0019) | Done in the VM | `tools/test-e2e`, first boot: `pyre` linked into `~/.claude/skills` and `~/.agents/skills` at the first login |
 | Night light | Done in the VM, without the tint | `tools/test-e2e`, desktop: off by default, the 20:00 to 07:00 schedule, `Mod+Ctrl+N` and the schedule in Noctalia's log. QEMU's display has no gamma table, so the tint waits for the machine |
+| Keymap, key list and PyreOS menu (ADR 0021) | Done in the VM | `tools/test-e2e`, desktop: the config validates; `Mod+K` lists 125 keys and `Mod+Alt+Space` the menu, in the launcher; a row chosen there and one found by the ordinary search both act; `Mod+Escape`, `Mod+Ctrl+L`, `Mod+W`, `Mod+Shift+2` and `Mod+Tab`; no recorder by default and a notice that says where it is, then the recorder installed through the menu's own code path and a recording made |
 | Remind me (ADR 0020) | Done in the VM | `tools/test-remind`: `/remind 3h …` and plain "remind me …" in the launcher, `pyre remind` in a terminal, a reminder that fires and stays, one cancelled from the launcher, and one that came due while the machine was off, shown at the next login |
 | The author's overlay | Scaffolded, untested on the machine | a local repository outside this one (`../pyre-overlay`): outputs, keys, foot, mpv, package lists |
 | Real hardware: driver under niri, 240 Hz and VRR, sleep, Bluetooth, audio, peripherals | Waits for the install | `tools/hw-report` collects it in one run |
@@ -32,8 +33,8 @@ Last updated: 2026-11-14
 - **`tools/test-e2e`:** every stage, 94 checks in 9 min 25 s.
 - **`tools/test-machine`:** all four stages, 74 checks in 7 min 41 s. The interactive installer, typed at the keyboard, onto a disk that held an MBR table, FAT and LUKS, next to a stand-in Windows disk; then every row marked "Done in the VM" above. The desktop powered off in 4 s.
 - **`tools/test-nvidia`:** both stages, 20 checks in 13 min 13 s. The installer applied the NVIDIA rule with no failed hook and no snapshots; DKMS built `nvidia-open` 620.70.06 for both kernels; each initramfs holds the four modules; the system boots and unlocks; a second apply changes nothing, and an apply without the GPU removes the drop-ins.
-- **After that ISO** (2026-11-14, `--local-packages`, with `pyre-cli` 0.4.0 and `pyre-desktop` 0.4.0: the agent skill, night light and reminders): `tools/test-e2e` passed every stage from a fresh install, 100 checks. `tools/test-remind` passed 45 checks on an overlay of that install. The ISO does not carry these two packages yet.
-- **CI** was green on `main` at the ISO's versions, and the testing channel carries those four.
+- **After that ISO** (2026-11-14, `--local-packages`, with `pyre-cli` 0.5.0 and `pyre-desktop` 0.5.0: the keymap, key list and menu, on top of the agent skill, night light and reminders): `tools/test-e2e` passed every stage from a fresh install, 124 checks. On overlays of that install, `tools/test-remind` passed 45 checks, `tools/test-theme` 83 and `tools/test-visual` 38, with the welcome panel, its guide and every theme captured. `test-machine` and `test-nvidia` have not run with these packages; they run on the rebuilt ISO.
+- **CI** is green on `main`, and the testing channel carries `pyre-cli` 0.4.0 and `pyre-desktop` 0.4.0 since 2026-11-15 00:06 UTC.
 - **`tools/check`:** passes, with new bats tests for the swapfile and resume arguments, ESP detection, the autologin keyring, the resume-offset check, `HW_SYS`, and the boot-branding hook before Limine exists.
 
 **Found on the way:**
@@ -49,6 +50,10 @@ Last updated: 2026-11-14
 - **One ISO build produced a damaged image** (2026-11-14): one bit of one offline package differed from the cached file, which itself still verifies. The squashfs matched its recorded checksum and the ISO on disk matched its cached copy, so the bit flipped while the image was being built; the host logged no machine-check or filesystem error. pacman's signature check stopped the install at that package. `tools/build-iso` now ends with `tools/verify-iso` and removes an image that fails. If it happens again, test the development machine's memory.
 - **A build without enough disk space** failed in xorriso after removing the previous ISO of the same date; `tools/build-iso` now needs 12 GiB free before it starts.
 - **Three VM tests at once ran the development machine out of memory** (2026-11-14): three sessions in three worktrees each started an install test, and `systemd-oomd` ended the editor and every session in it. Every VM test and `tools/run-vm` now takes one lock for the whole machine (`tools/lib/vmlock.sh`), so a second job waits or is refused.
+- **QEMU's keyboard cannot press Alt+Print.** A guest sees Alt go down and up and never the Print key (read from the guest's event device, 2026-11-14): the kernel's SysRq handling takes the key, and what it re-injects does not arrive. Ctrl+Print and Shift+Print arrive. `tools/test-e2e` therefore runs `pyre-record` itself, and the key is on the hardware list; the desktop this machine runs today binds the same key for recordings.
+- **An offline install has package lists**, the ISO's own, so the PyreOS menu can install at once on a fresh machine with a network. Once they are old, pacman fails to fetch and the menu says to update first.
+- **A `[pyre]` database newer than the channel's breaks a plain `pacman -Sy`** after the server changes: pacman keeps the newer file and fetches only the channel's signature, which does not match ("invalid or corrupted database"). It happens in tests that switch a guest from the local repository to the channel right after a local build, never on a real install. `test-visual`, `test-theme` and `test-splash` now force the refresh.
+- **`tools/test-visual` captured a bare desktop as "the welcome panel"** when its base disk had been logged into before. It now makes the login a first one and checks that the panel is open.
 - **The serial log sometimes shows a character of the guest's output twice** (its input arrived intact in 150 long commands). When it hit a probe's end marker the probe never finished. Markers now match with any character doubled (`tools/lib/vmtest.sh`).
 
 **Carried over** (later phases unless reprioritized):

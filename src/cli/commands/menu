@@ -1,0 +1,255 @@
+# shellcheck shell=bash
+# help: the PyreOS menu: install, remove, update, style, setup, system (Mod+Alt+Space)
+# usage: pyre menu [--list]
+#   (no option)   open the menu in the launcher, where typing searches it
+#   --list        print "title<TAB>description" for every row
+# The launcher shows the same rows behind /pyre and in its own search, and
+# runs "pyre menu --pick" on the one you choose. A row comes from
+# /usr/share/pyre/menu/menu.tsv, from the optional apps in catalog.tsv, or
+# from the bundles and themes that are installed. Only a row this command
+# lists can be picked, and what it does is fixed here: the data files hold
+# words and package names, never commands (ADR 0021).
+
+# shellcheck source=src/cli/lib/bundles.sh
+source "$PYRE_LIB/lib/bundles.sh"
+# shellcheck source=src/cli/lib/theme.sh
+source "$PYRE_LIB/lib/theme.sh"
+
+menu_dir() {
+  printf '%s\n' "$PYRE_ROOT/usr/share/pyre/menu"
+}
+
+# Rows travel with this separator instead of the files' tab: read joins
+# neighbouring tabs, which would lose an empty field.
+menu_sep=$'\037'
+
+# menu_data FILE: the rows of a data file, without comments and empty lines.
+menu_data() {
+  grep -v -e '^#' -e '^[[:space:]]*$' "$(menu_dir)/$1" | tr '\t' "$menu_sep"
+}
+
+# menu_installed: true when package $1 is installed. The list of installed
+# packages is read once, because the launcher waits two seconds at most.
+menu_installed() {
+  [[ -n "${menu_pkgs+x}" ]] || menu_pkgs=$'\n'"$(pacman -Qq 2>/dev/null)"$'\n'
+  [[ "$menu_pkgs" == *$'\n'"$1"$'\n'* ]]
+}
+
+menu_resume_set() {
+  local cmdline=""
+  read -r cmdline <"${PYRE_CMDLINE:-/proc/cmdline}" || true
+  [[ " $cmdline " == *" resume="* ]]
+}
+
+# menu_aur_helper: the AUR helper that is installed, if one is. PyreOS ships
+# none.
+menu_aur_helper() {
+  local helper
+  for helper in paru yay; do
+    [[ -x "$PYRE_ROOT/usr/bin/$helper" ]] && { printf '%s\n' "$helper"; return 0; }
+  done
+  return 1
+}
+
+# menu_apps install|remove: a row per optional app and bundle that is not
+# installed yet, or that is.
+menu_apps() {
+  local want="$1" name desc pkgs state
+  while IFS="$menu_sep" read -r name desc pkgs; do
+    state=install
+    menu_installed "${pkgs%% *}" && state=remove
+    [[ "$state" == "$want" ]] && menu_row "${want^} › $name" "$desc" "$want" "$pkgs"
+  done < <(menu_data catalog.tsv)
+  while IFS='|' read -r name desc; do
+    state=install
+    menu_installed "$name" && state=remove
+    [[ "$state" == "$want" ]] &&
+      menu_row "${want^} › ${name#pyre-bundle-} bundle" "${desc#PyreOS bundle: }" "$want" "$name"
+  done < <(bundle_packages)
+  return 0
+}
+
+menu_themes() {
+  local id
+  while IFS= read -r id; do
+    menu_row "Theme › $(theme_field "$id" name)" "$(theme_field "$id" description)" theme "$id"
+  done < <(theme_ids)
+}
+
+# menu_row TITLE DESCRIPTION VERB ARGUMENT: one row, its fields separated.
+menu_row() {
+  local IFS="$menu_sep"
+  printf '%s\n' "$*"
+}
+
+# menu_rows: every row. One with a quote or a backslash is left out: the
+# launcher puts the chosen row between single quotes on a command line.
+menu_rows() {
+  local title desc verb arg
+  while IFS="$menu_sep" read -r title desc verb arg; do
+    case "$verb" in
+      install-list) menu_apps install ;;
+      remove-list) menu_apps remove ;;
+      theme-list) menu_themes ;;
+      hibernate) ! menu_resume_set || menu_row "$title" "$desc" "$verb" "" ;;
+      aur) ! menu_aur_helper >/dev/null || menu_row "$title" "$desc" "$verb" "" ;;
+      *) menu_row "$title" "$desc" "$verb" "$arg" ;;
+    esac
+  done < <(menu_data menu.tsv) | { grep -v -e "'" -e '[\]' || true; }
+}
+
+# menu_list: what the launcher shows, "title<TAB>description" per row.
+menu_list() {
+  menu_rows | cut -d "$menu_sep" -f 1,2 | tr "$menu_sep" '\t'
+}
+
+# menu_term WHAT...: run "pyre menu --run WHAT" in a floating terminal
+# (app-id pyre.menu, a window rule in the niri defaults), which stays open
+# until Enter, so the result can be read.
+menu_term() {
+  command -v foot >/dev/null 2>&1 || die "menu: no terminal (foot) to run this in"
+  foot --app-id=pyre.menu --title=PyreOS -- "$PYRE_BIN" menu --run "$@" >/dev/null 2>&1 &
+  disown
+}
+
+menu_shell() {
+  noctalia msg "$@" >/dev/null || die "menu: the shell (Noctalia) did not answer"
+}
+
+# menu_act VERB ARGUMENT: what a row does.
+menu_act() {
+  local verb="$1" arg="$2" file
+  case "$verb" in
+    term | install | remove | search | aur) menu_term "$verb" "$arg" ;;
+    launcher) menu_shell panel-open launcher "$arg" ;;
+    panel) menu_shell panel-open "$arg" ;;
+    settings) menu_shell settings-open ;;
+    nightlight) menu_shell nightlight-force-toggle ;;
+    session) menu_shell session "$arg" ;;
+    hibernate) systemctl hibernate ;;
+    theme) "$PYRE_BIN" theme set "$arg" ;;
+    guide) "$PYRE_BIN" welcome guide ;;
+    welcome) "$PYRE_BIN" welcome ;;
+    url)
+      [[ "$arg" == https://* ]] || die "menu: not a web address: $arg"
+      xdg-open "$arg" >/dev/null 2>&1 &
+      disown
+      ;;
+    edit)
+      case "$arg" in
+        niri) file=niri/config.kdl ;;
+        noctalia) file=noctalia/config.toml ;;
+        *) die "menu: nothing to edit named $arg" ;;
+      esac
+      foot -- "${EDITOR:-nvim}" "${XDG_CONFIG_HOME:-$HOME/.config}/$file" >/dev/null 2>&1 &
+      disown
+      ;;
+    *) die "menu: unknown action $verb" ;;
+  esac
+}
+
+# menu_pick ROW: do what the row with this title does. ROW is a row as
+# --list printed it; only its title is used, and only to find the row again.
+menu_pick() {
+  local want="${1%%$'\t'*}" title desc verb arg
+  while IFS="$menu_sep" read -r title desc verb arg; do
+    [[ "$title" == "$want" ]] || continue
+    menu_act "$verb" "$arg"
+    return 0
+  done < <(menu_rows)
+  die "menu: no such entry: $want"
+}
+
+# menu_known_packages PKG...: true when the row that installs or removes
+# exactly these packages is in the catalog or among the bundles.
+menu_known_packages() {
+  local want="$*" name desc pkgs
+  while IFS="$menu_sep" read -r name desc pkgs; do
+    [[ "$pkgs" == "$want" ]] && return 0
+  done < <(menu_data catalog.tsv)
+  while IFS='|' read -r name desc; do
+    [[ "$name" == "$want" ]] && return 0
+  done < <(bundle_packages)
+  return 1
+}
+
+# menu_online PKG: true when an install can start: a network, and package
+# lists that know PKG. After an install without a network pacman has no lists
+# yet; an update fetches them, so it is offered first.
+menu_online() {
+  if [[ "$(nmcli networking connectivity 2>/dev/null)" == none ]]; then
+    printf 'This machine is offline. Installing needs a network connection.\n'
+    return 1
+  fi
+  pacman -Si -- "$1" >/dev/null 2>&1 && return 0
+  printf 'PyreOS has no package lists yet. An update fetches them, and the install\nfollows it.\n\n'
+  confirm "Update the system now?" || return 1
+  "$PYRE_BIN" update
+}
+
+menu_install() {
+  menu_online "$1" || return 1
+  as_root pacman -S --needed -- "$@" ||
+    { printf '\nIf pacman could not fetch a file, the package lists are old: run Update first.\n'; return 1; }
+}
+
+# menu_find TOOL LIST-OPTION: pick packages from a searchable list of
+# everything TOOL (pacman or an AUR helper) can install, and install them.
+menu_find() {
+  local tool="$1" picked=()
+  command -v fzf >/dev/null 2>&1 || die "menu: fzf is not installed"
+  menu_online pacman || return 1
+  mapfile -t picked < <("$tool" "$2" | fzf --multi --prompt='Install > ' \
+    --header='Tab marks several, Enter installs, Esc leaves' --preview="$tool -Si {1}" --preview-window=down:60%)
+  (( ${#picked[@]} )) || return 0
+  if [[ "$tool" == pacman ]]; then menu_install "${picked[@]}"; else "$tool" -S -- "${picked[@]}"; fi
+}
+
+# menu_run VERB ARGUMENT: the jobs that need a terminal. They run inside the
+# floating terminal, which then waits for Enter.
+menu_run() {
+  local verb="${1:-}" arg="${2:-}" status=0 helper pkgs=()
+  read -r -a pkgs <<<"$arg"
+  case "$verb" in
+    term)
+      case "$arg" in
+        update | doctor | hw | snapshot) "$PYRE_BIN" "$arg" || status=$? ;;
+        about) fastfetch || status=$? ;;
+        *) die "menu: nothing to run named $arg" ;;
+      esac
+      ;;
+    install | remove)
+      menu_known_packages "${pkgs[@]}" || die "menu: not in the catalog: $arg"
+      # The first thing in the window is what it is about to do: the next
+      # line is sudo asking for the password.
+      if [[ "$verb" == install ]]; then
+        printf 'Installing %s\n\n' "${pkgs[*]}"
+        menu_install "${pkgs[@]}" || status=$?
+      else
+        printf 'Removing %s\n\n' "${pkgs[*]}"
+        as_root pacman -Rs -- "${pkgs[@]}" || status=$?
+      fi
+      ;;
+    search) menu_find pacman -Slq || status=$? ;;
+    aur)
+      helper="$(menu_aur_helper)" || die "menu: no AUR helper (paru or yay) is installed"
+      menu_find "$helper" -Slqa || status=$?
+      ;;
+    *) die "menu: nothing to run named $verb" ;;
+  esac
+  printf '\n'
+  (( status == 0 )) && printf 'Done. ' || printf 'That did not finish. '
+  read -r -p 'Press Enter to close.' _ || true
+  return "$status"
+}
+
+cmd_menu() {
+  case "${1:-}" in
+    "") noctalia msg panel-open launcher "/pyre " >/dev/null 2>&1 || menu_list ;;
+    --list) menu_list ;;
+    --pick) menu_pick "${2:?menu: --pick needs a row}" ;;
+    --run) shift; menu_run "$@" ;;
+    -h | --help) command_usage "${BASH_SOURCE[0]}" ;;
+    *) die "menu: unknown option $1" ;;
+  esac
+}

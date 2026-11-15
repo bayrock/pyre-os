@@ -26,7 +26,7 @@ pyre theme set birch --keep-wallpaper
 pyre theme current
 ```
 
-Noctalia's settings window (**Super + Shift + ,**) offers more palettes in its theme settings, including ones made from your wallpaper. Choosing one there leaves the PyreOS themes; `pyre theme set` brings one back.
+Noctalia's settings window (in the launcher: `shell settings`) offers more palettes in its theme settings, including ones made from your wallpaper. Choosing one there leaves the PyreOS themes; `pyre theme set` brings one back.
 
 ## What a theme does not change
 

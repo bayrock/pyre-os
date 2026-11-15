@@ -43,16 +43,18 @@ Add `--json` (`niri msg --json outputs`) when a script reads the answer; the pla
 
 ## Keys
 
-The full default keymap is in `/usr/share/doc/pyre/guide/02-keys.md`; `Mod` is the Super key. Before binding a key, read `binds.kdl` to see what it does now, and tell the user what the new bind replaces.
+`pyre keys --list` prints every key with what it does, the defaults and the user's own; `/usr/share/doc/pyre/guide/02-keys.md` explains the keymap. `Mod` is the Super key. The defaults follow macOS and the Hyprland-based Arch desktops (**Super + W** closes, **Super + F** is fullscreen, **Super + 1** is the first workspace), so a user from there needs few changes. Before binding a key, check what it does now, and tell the user what the new bind replaces.
 
 ```kdl
 binds {
-    // A new key
-    Mod+T { spawn "foot"; }
-    // Replaces the default browser key
-    Mod+B hotkey-overlay-title="Browser" { spawn "chromium"; }
+    // A new key, with the description the key list (Super + K) shows
+    Mod+B hotkey-overlay-title="Browser" { spawn "firefox"; }
+    // Replaces the default editor key
+    Mod+Shift+N hotkey-overlay-title="Editor" { spawn "foot" "hx"; }
 }
 ```
+
+**Super + C**, **V**, **X** and **A** are unbound on purpose: copy and paste are the apps' own **Ctrl** keys, and niri cannot press keys for an app.
 
 `spawn` takes the program and each argument as separate strings: `spawn "nautilus" "--new-window"`. For a shell command line, use `spawn "sh" "-c" "..."`.
 
@@ -120,5 +122,5 @@ The focus ring's colors come from the theme (`noctalia.kdl`). Setting them in `c
 
 ## Screenshots and recording
 
-- **Print** picks a region, window or screen; **Ctrl + Print** takes the focused screen; **Alt + Print** takes the focused window. Screenshots go to `~/Pictures/Screenshots` and to the clipboard.
-- **Super + Print** starts or stops a screen recording through `pyre-record`. The first one asks which screen or window to record. Recordings go to `~/Videos`.
+- **Print** picks a region, window or screen; **Ctrl + Print** takes the focused screen; **Shift + Print** takes the focused window. Screenshots go to `~/Pictures/Screenshots` and to the clipboard.
+- **Alt + Print** starts or stops a screen recording through `pyre-record`. The recorder (`gpu-screen-recorder`) is an optional install; without it the key shows a notification that says so. The first recording asks which screen or window to record. Recordings go to `~/Videos`.

@@ -35,7 +35,7 @@ The boot menu, the boot splash and the login screen always wear Ember. They belo
 
 1. Copy a palette as a starting point: `cp /usr/share/pyre/themes/ember/palette.json ~/.config/noctalia/palettes/Mine.json`. The file must be a real file, not a link.
 2. Edit the colors. The file has a `dark` and a `light` set of the same roles; keep every role.
-3. Choose it in Noctalia's settings window (**Super + Shift + ,**, the theme settings), or with `noctalia msg color-scheme-set custom Mine`.
+3. Choose it in Noctalia's settings window (from the launcher: `shell settings`; then the theme settings), or with `noctalia msg color-scheme-set custom Mine`.
 
 A file of the user's in `~/.config/noctalia/palettes/` is never replaced by PyreOS, even under a PyreOS theme's name. `pyre theme list` shows only the PyreOS themes, so a palette of the user's own does not appear there; `pyre theme set <name>` brings a PyreOS theme back.
 

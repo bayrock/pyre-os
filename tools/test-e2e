@@ -139,6 +139,77 @@ stage_desktop() {
   sleep 3
   expect terminal-keybind 'u niri msg windows | grep "App ID"' '"foot"'
 
+  # The key list and the PyreOS menu live in the launcher (ADR 0021).
+  expect keys-list 'u pyre keys --list | grep -c .' '^1[0-9][0-9]$'
+  expect menu-list 'u pyre menu --list | grep -c -e "^Install " -e "^Theme " -e "^Update "' '^[1-9][0-9]$'
+  send_keys meta_l-k
+  sleep 3
+  grep -q '"activePanelId":"launcher"' <<<"$(noctalia_status keys)" || die "Mod+K did not open the key list"
+  pass "Mod+K opens the key list"
+  shot keys
+  send_keys esc
+  sleep 1
+  # Mod+Alt+Space opens the menu; typing narrows it, and Enter on "Style ›
+  # Wallpaper" goes through pyre menu --pick to the wallpaper panel.
+  send_keys meta_l-alt-spc
+  sleep 3
+  grep -q '"activePanelId":"launcher"' <<<"$(noctalia_status menu)" || die "Mod+Alt+Space did not open the menu"
+  shot menu
+  type_keys "wallpaper"
+  sleep 2
+  shot menu-search
+  send_keys ret
+  sleep 3
+  grep -q '"activePanelId":"wallpaper"' <<<"$(noctalia_status menu-pick)" || die "the menu's Wallpaper row did not open the wallpaper panel"
+  pass "Mod+Alt+Space opens the menu, and a row acts"
+  send_keys esc
+  sleep 1
+  # The same rows turn up in the launcher's own search, next to the apps.
+  send_keys meta_l-spc
+  sleep 2
+  type_keys "keybindings"
+  sleep 2
+  shot launcher-search
+  send_keys ret
+  sleep 3
+  grep -q '"activePanelId":"launcher"' <<<"$(noctalia_status search-pick)" || die "the search's Keybindings row did not open the key list"
+  pass "a menu row found by the launcher's search acts"
+  send_keys esc
+  sleep 1
+
+  # Mod+Escape is the system menu: lock, log out, restart, shut down.
+  send_keys meta_l-esc
+  sleep 2
+  grep -q '"activePanelId":"session"' <<<"$(noctalia_status system-menu)" || die "Mod+Escape did not open the system menu"
+  pass "Mod+Escape opens the system menu"
+  shot system-menu
+  send_keys esc
+  sleep 1
+
+  # Windows and workspaces through the familiar keys. Mod+Shift+2 moves the
+  # terminal to workspace 2, and niri then drops the workspace it left empty,
+  # so the window is on the first workspace again: its workspace id tells.
+  local ws_before ws_after
+  ws_before="$(probe window-workspace 'u niri msg focused-window | grep "Workspace ID"')"
+  send_keys meta_l-shift-2
+  sleep 1
+  ws_after="$(probe window-workspace-after 'u niri msg focused-window | grep "Workspace ID"')"
+  [[ "$ws_after" == *"Workspace ID"* && "$ws_after" != "$ws_before" ]] || die "Mod+Shift+2 did not move the window: $ws_before, then $ws_after"
+  pass "Mod+Shift+2 moves the window to another workspace"
+  send_keys meta_l-tab
+  sleep 1
+  expect workspace-next 'u niri msg workspaces | grep -m 1 "\*"' '\* 2'
+  send_keys meta_l-shift-tab
+  sleep 1
+  expect workspace-previous 'u niri msg workspaces | grep -m 1 "\*"' '\* 1'
+  send_keys meta_l-w
+  sleep 2
+  expect close-window 'u niri msg windows | grep -c "App ID" || true' '^0$'
+  send_keys meta_l-1
+  sleep 1
+  send_keys meta_l-ret
+  sleep 3
+
   # Notifications.
   expect notify 'u notify-send -a "PyreOS e2e" "Notification check" "Sent with notify-send" && sleep 1.5 && u niri msg layers | grep -c noctalia-notification' '^[1-9]'
   shot notification
@@ -161,9 +232,9 @@ stage_desktop() {
   expect screenshot-keybind 'ls /home/'"$user"'/Pictures/Screenshots | wc -l' "^$((before + 1))$"
 
   # Lock and unlock, then lock on idle.
-  send_keys meta_l-alt-l
+  send_keys meta_l-ctrl-l
   sleep 4
-  grep -q '"locked":true' <<<"$(noctalia_status lock)" || die "Super+Alt+L did not lock"
+  grep -q '"locked":true' <<<"$(noctalia_status lock)" || die "Mod+Ctrl+L did not lock"
   expect locked-hint 'loginctl show-session $(loginctl show-user '"$user"' -p Display --value) -p LockedHint --value' '^yes$'
   type_keys "$password"$'\n'
   sleep 4
@@ -174,8 +245,31 @@ stage_desktop() {
   sleep 4
   expect idle-reset 'u noctalia msg config-set idle.behavior.lock.timeout 600 >/dev/null; u noctalia msg status | tr -d "[:space:]"; echo' '"locked":false'
 
-  # Recording through the screen-cast portal (Mod+Print runs pyre-record).
-  send_keys meta_l-print
+  # The screen recorder is an optional install (ADR 0021). Without it, the
+  # recording key says where to get it. The key is Alt+Print, and this test
+  # runs what it runs instead of pressing it: QEMU's keyboard never delivers
+  # Alt+Print (the guest sees Alt alone, read from its event device on
+  # 2026-11-14), so the key itself is checked on hardware.
+  expect recorder-optional 'pacman -Qq gpu-screen-recorder mpv imv papers 2>&1 | grep -c "was not found"' '^4$'
+  expect record-key 'u pyre keys --list | grep -c "^Alt + Print.*recording"' '^1$'
+  expect record-without 'u pyre-record; echo rc=$?' '^rc=1$'
+  sleep 1
+  expect record-hint 'u niri msg layers | grep -c noctalia-notification' '^[1-9]'
+  shot record-hint
+  # Install it the way the menu's row does, in the terminal the row opens:
+  # here on the console, with the package lists an update would fetch. The
+  # sync itself reports a failure, because this test's [pyre] server is not
+  # running in this stage; Arch's lists are what the install needs.
+  expect install-lists 'pacman -Sy >/dev/null 2>&1; pacman -Si gpu-screen-recorder >/dev/null && echo ready' '^ready$'
+  # snap-pac is told to skip this one transaction: the next stage boots the
+  # newest snapshot and expects the pair from stage 3, taken before its marker.
+  expect menu-install 'yes | SNAP_PAC_SKIP=y pyre menu --run install gpu-screen-recorder >/dev/null 2>&1; pacman -Qq gpu-screen-recorder' '^gpu-screen-recorder$'
+  expect menu-install-no-snapshot 'snapper -c root list --columns type | grep -cwE "pre|post"' '^2$'
+  expect menu-remove-row 'u pyre menu --list | grep -c "^Remove .*Screen recorder"' '^1$'
+
+  # Recording through the screen-cast portal, started and stopped by
+  # pyre-record as the key does.
+  probe record-start '(u pyre-record >/dev/null 2>&1 &)' >/dev/null
   sleep 6
   expect portal-dialog 'u niri msg windows | grep "App ID"' 'xdg-desktop-portal-gnome'
   shot portal
@@ -186,7 +280,7 @@ stage_desktop() {
   expect recording 'pgrep -u '"$user"' -f "^gpu-screen-recorder " >/dev/null && echo recording' '^recording$'
   send_keys meta_l-ret
   sleep 6
-  send_keys meta_l-print
+  probe record-stop 'u pyre-record' >/dev/null
   sleep 5
   expect recording-file 'f=$(ls -t /home/'"$user"'/Videos/*.mp4 | head -n 1); ffprobe -v error -show_entries stream=codec_name,width,height -of csv=p=0 "$f" | head -n 1' '^h264,1280,800$'
 

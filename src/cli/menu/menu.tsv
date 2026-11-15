@@ -1,0 +1,33 @@
+# The PyreOS menu (ADR 0021): what "pyre menu" lists, and the launcher shows
+# behind /pyre and in its search. Tab-separated: title, description, verb,
+# argument. Data only: a verb is one of the actions "pyre menu" knows, and the
+# argument is never run as a command. A title names a row, so each is unique,
+# and no field holds a quote or a backslash.
+#
+# A verb ending in -list stands for the rows "pyre menu" makes itself, in that
+# place: the optional apps and bundles, and the themes.
+Update › Update the system	Snapshots first, then every package, then a boot check	term	update
+Remind me…	Set a reminder: 10m tea, 5pm call mum	launcher	/remind 
+Install › Find a package…	Search everything in the Arch repositories	search	
+Install › Find in the AUR…	Search the AUR with the helper you installed	aur	
+Install		install-list	
+Remove		remove-list	
+Theme		theme-list	
+Style › Wallpaper	Pick a wallpaper	panel	wallpaper
+Style › Night light	Warmer screen colors, on or off	nightlight	
+Style › Shell settings	The bar, the dock, notifications, night light and more	settings	
+Setup › Screens, keys and windows	Your niri config, in the editor	edit	niri
+Setup › Shell config	Your Noctalia config, in the editor	edit	noctalia
+Setup › Hardware	The hardware rules that match this machine	term	hw
+Setup › Check the system	Kernels, boot entries, snapshots and PyreOS state	term	doctor
+Learn › Keybindings	Every shortcut, searchable	launcher	/keys 
+Learn › User guide	First steps, keys, themes, updates, software	guide	
+Learn › Welcome panel	The panel from your first login	welcome	
+Learn › niri wiki	Windows, workspaces and the config file	url	https://github.com/niri-wm/niri/wiki
+Learn › Arch Wiki	Everything underneath	url	https://wiki.archlinux.org
+System › Lock	Lock the screen	session	lock
+System › Suspend	Lock, then sleep with the session in memory	session	lock-and-suspend
+System › Hibernate	Save the session to disk and power off	hibernate	
+System › Log out, restart or shut down…	The power menu	panel	session
+System › Snapshots	The system and home snapshots	term	snapshot
+About this system	PyreOS version, hardware and uptime	term	about

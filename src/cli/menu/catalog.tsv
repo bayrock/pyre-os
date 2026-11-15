@@ -1,0 +1,39 @@
+# Optional apps for Install and Remove in the PyreOS menu (ADR 0021).
+# Tab-separated: name, description, packages (separated by spaces). Data only:
+# every package is in the core or extra repository of Arch (tools/check-catalog),
+# so nothing here is proprietary or from the AUR. A name is unique, and no
+# field holds a quote or a backslash. An app counts as installed when its
+# first package is.
+Video player	mpv: plays almost anything	mpv
+Image viewer	imv: fast, keyboard driven	imv
+Document viewer	Papers: PDF and e-books	papers
+Screen recorder	What the recording key (Alt + Print) uses	gpu-screen-recorder
+Music player	Amberol: plays your music files	amberol
+VLC	Media player with every option	vlc
+E-book reader	Foliate	foliate
+Calculator	GNOME Calculator	gnome-calculator
+Archive manager	File Roller: zip, tar and 7z in Files	file-roller
+Disks	GNOME Disks: partitions, images and drive health	gnome-disk-utility
+Disk usage	Baobab: what fills the disk	baobab
+Password manager	KeePassXC: a local, encrypted vault	keepassxc
+Virtual machines	GNOME Boxes	gnome-boxes
+Text editor	GNOME Text Editor: a simple graphical editor	gnome-text-editor
+Helix	A modal editor for the terminal	helix
+Zed	A fast graphical code editor	zed
+Code - OSS	The open source build of VS Code	code
+Emacs	The extensible editor	emacs
+Alacritty	A GPU-accelerated terminal	alacritty
+Kitty	A terminal with tabs, splits and images	kitty
+Ghostty	A fast, native terminal	ghostty
+Chromium	The open source web browser behind Chrome	chromium
+Signal	Private messenger	signal-desktop
+Telegram	Messenger	telegram-desktop
+Element	Matrix chat	element-desktop
+BitTorrent	Fragments: a simple torrent client	fragments
+Krita	Digital painting	krita
+Docker	Containers, with Compose	docker docker-compose docker-buildx
+Podman	Containers without a daemon	podman
+Distrobox	Any Linux distribution inside your terminal	distrobox
+Terminal tools	bat, ripgrep and fd: a better cat, grep and find	bat ripgrep fd
+tmux	Terminal multiplexer	tmux
+Yazi	A file manager for the terminal	yazi

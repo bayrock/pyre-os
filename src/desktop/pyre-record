@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Start a screen recording, or stop the running one (bound to Mod+Print).
+# Start a screen recording, or stop the running one (bound to Alt+Print).
+# The recorder is an optional install (ADR 0021); without it, say where it is.
 # gpu-screen-recorder captures through the screen-cast portal, so the first
 # run asks which output or window to record; the choice is remembered.
 # Usage: pyre-record
@@ -19,8 +20,13 @@ if pkill -INT -u "$UID" -f '^gpu-screen-recorder( |$)'; then
   exit 0
 fi
 
+if ! command -v gpu-screen-recorder >/dev/null; then
+  notify "The screen recorder is not installed" "Open the launcher and choose Install › Screen recorder."
+  exit 1
+fi
+
 mkdir -p -- "$dir"
-notify "Recording" "Press Mod+Print again to stop."
+notify "Recording" "Press Alt+Print again to stop."
 # Hardware encoding when the GPU has it, otherwise x264 on the CPU.
 exec gpu-screen-recorder -w portal -restore-portal-session yes -fallback-cpu-encoding yes \
   -f 60 -a default_output -o "$dir/Recording $(date '+%Y-%m-%d %H-%M-%S').mp4"

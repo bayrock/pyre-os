@@ -29,7 +29,7 @@ niri applies the file as you save it. If something is wrong it keeps the previou
 Night light takes the blue out of every screen, so the colors turn warmer and easier on the eyes in the evening. It is part of Noctalia, and it is off until you turn it on.
 
 - **Right now:** **Super + Ctrl + N** turns the warm light on at once, and off again. A right-click on the control center's **Night Light** button does the same. It lasts until you log out.
-- **Every evening:** turn on **Night Light** in the shell settings (**Super + Shift + ,**), under Services. The screen then warms at 20:00 and returns to normal at 07:00, fading over an hour around each. A click on the control center's button follows the same schedule, until you log out.
+- **Every evening:** turn on **Night Light** in the shell settings (in the launcher: `shell settings`), under Services. The screen then warms at 20:00 and returns to normal at 07:00, fading over an hour around each. A click on the control center's button follows the same schedule, until you log out.
 - **Your own hours, or the real sunset:** the settings' Location page holds the two times. To follow the sun where you live, enter a place there and turn **Custom Schedule** off. PyreOS never looks your location up by itself.
 - **How warm:** the night temperature, next to the Night Light switch. It starts at 4000 K, and a lower number is warmer.
 

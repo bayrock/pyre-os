@@ -4,14 +4,16 @@
 # src/hw/, skills/ and system/ of this repository, so the package is built in
 # place.
 pkgname=pyre-cli
-pkgver=0.4.0
+pkgver=0.5.0
 pkgrel=1
-pkgdesc='PyreOS lifecycle tool: update, snapshot, rollback, doctor, reconcile, themes, welcome, reminders, hardware rules, agent skill'
+pkgdesc='PyreOS lifecycle tool: update, snapshot, rollback, doctor, reconcile, themes, menu, keys, welcome, reminders, hardware rules, agent skill'
 arch=(any)
 url='https://github.com/bayrock/pyre-os'
 license=(MIT)
 depends=(bash coreutils diffutils snapper sudo util-linux)
-optdepends=('libnotify: notifications about .pyre-new files, and reminders')
+optdepends=('libnotify: notifications about .pyre-new files, and reminders'
+            'fzf: the package search of pyre menu'
+            'foot: the terminal pyre menu runs installs and updates in')
 
 package() {
   local root="$startdir/../.." dir
@@ -21,6 +23,8 @@ package() {
     find "$root/src/cli/$dir" -maxdepth 1 -type f -exec install -m644 -t "$pkgdir/usr/lib/pyre/$dir" {} +
   done
   (cd "$root/src/hw" && find rules files -type f -exec install -Dm644 {} "$pkgdir/usr/share/pyre/hw/{}" \;)
+  # The PyreOS menu's rows and its catalog of optional apps (ADR 0021): data.
+  install -Dm644 -t "$pkgdir/usr/share/pyre/menu" "$root"/src/cli/menu/*.tsv
   # The agent skills, which the user unit 004-agent-skills links into each
   # home for the coding agents that read them (ADR 0019).
   (cd "$root/skills" && find -- * -type f -exec install -Dm644 {} "$pkgdir/usr/share/pyre/skills/{}" \;)

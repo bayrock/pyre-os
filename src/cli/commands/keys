@@ -1,0 +1,95 @@
+# shellcheck shell=bash
+# help: list the keyboard shortcuts (Mod+K)
+# usage: pyre keys [--list]
+#   (no option)   open the list in the launcher, where typing searches it
+#   --list        print "key<TAB>what it does": the PyreOS defaults, with
+#                 the keys you bound in ~/.config/niri/config.kdl on top
+# The keys and their descriptions come from the niri config itself (the
+# hotkey-overlay-title of each bind), so the list cannot drift from the keymap.
+
+keys_defaults() {
+  printf '%s\n' "${PYRE_BINDS:-$PYRE_ROOT/usr/share/pyre/defaults/niri/binds.kdl}"
+}
+
+keys_user() {
+  printf '%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}/niri/config.kdl"
+}
+
+# keys_parse FILE...: "KEY<TAB>description" for every one-line bind inside a
+# binds { } block, in file order. A later bind of a key replaces the earlier
+# one's description and keeps its place, as niri does with the bind itself.
+# A bind without a title is described by its action. With KEYS_SECTIONS=1
+# (tools/keys-doc), a comment line in the block is printed as "#<TAB>comment"
+# before the binds that follow it.
+keys_parse() {
+  awk -v sections="${KEYS_SECTIONS:-0}" '
+    BEGIN {
+      name["Mod"] = "Super"; name["Return"] = "Enter"; name["Comma"] = ","; name["Period"] = "."
+      name["Minus"] = "-"; name["Equal"] = "="; name["BracketLeft"] = "["; name["BracketRight"] = "]"
+      name["Slash"] = "/"; name["Page_Down"] = "Page Down"; name["Page_Up"] = "Page Up"
+      name["WheelScrollDown"] = "Wheel Down"; name["WheelScrollUp"] = "Wheel Up"
+      name["WheelScrollLeft"] = "Wheel Left"; name["WheelScrollRight"] = "Wheel Right"
+    }
+    function pretty(key,    n, parts, i, out) {
+      n = split(key, parts, "+")
+      out = ""
+      for (i = 1; i <= n; i++) {
+        if (parts[i] in name) parts[i] = name[parts[i]]
+        sub(/^XF86/, "", parts[i])
+        out = out (i > 1 ? " + " : "") parts[i]
+      }
+      return out
+    }
+    FNR == 1 { inside = 0 }
+    /^[[:space:]]*binds[[:space:]]*\{[[:space:]]*$/ { inside = 1; next }
+    inside && /^[[:space:]]*\}[[:space:]]*$/ { inside = 0; next }
+    inside && sections && /^[[:space:]]*\/\/ / {
+      line = $0
+      sub(/^[[:space:]]*\/\/ /, "", line)
+      order[++count] = "#" line
+      next
+    }
+    !inside || /^[[:space:]]*\/\// { next }
+    {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      if (line !~ /\{.*\}[[:space:]]*$/) next
+      key = line
+      sub(/[[:space:]{].*/, "", key)
+      if (key !~ /^[A-Za-z0-9_+]+$/) next
+      if (match(line, /hotkey-overlay-title="[^"]*"/)) {
+        title = substr(line, RSTART + 22, RLENGTH - 23)
+      } else {
+        title = line
+        sub(/^[^{]*\{[[:space:]]*/, "", title)
+        sub(/;?[[:space:]]*\}[[:space:]]*$/, "", title)
+      }
+      if (!(key in what)) order[++count] = key
+      what[key] = title
+    }
+    END {
+      for (i = 1; i <= count; i++) {
+        if (order[i] ~ /^#/) printf "#\t%s\n", substr(order[i], 2)
+        else printf "%s\t%s\n", pretty(order[i]), what[order[i]]
+      }
+    }
+  ' "$@"
+}
+
+keys_list() {
+  local files=() file
+  for file in "$(keys_defaults)" "$(keys_user)"; do
+    [[ -r "$file" ]] && files+=("$file")
+  done
+  (( ${#files[@]} )) || die "no niri keymap found at $(keys_defaults)"
+  keys_parse "${files[@]}"
+}
+
+cmd_keys() {
+  case "${1:-}" in
+    "") noctalia msg panel-open launcher "/keys " >/dev/null 2>&1 || keys_list ;;
+    --list) keys_list ;;
+    -h | --help) command_usage "${BASH_SOURCE[0]}" ;;
+    *) die "keys: unknown option $1" ;;
+  esac
+}

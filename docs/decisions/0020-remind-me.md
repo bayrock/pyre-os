@@ -42,4 +42,4 @@ Researched on 2026-11-14 in Noctalia's sources and documentation at tag `v5.5.0`
 - **A reminder is as reliable as the notification.** It stays on screen until dismissed and is kept in Noctalia's history, but it makes no sound of its own and follows Do Not Disturb like any other notification.
 - **Coupled to Noctalia's plugin API** like ADR 0016: `plugin_api = 24`, and a provider without a prefix, which Noctalia's code supports but its documentation does not mention. If that goes away, `/remind` still works.
 - **Not built:** repeating reminders and snooze. `pyre remind` again is three seconds.
-- About 250 lines of bash against the CLI budget (ARCHITECTURE).
+- About 300 lines of bash against the CLI budget (ARCHITECTURE).

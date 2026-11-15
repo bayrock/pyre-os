@@ -51,6 +51,27 @@ kind = "path"
 location = "/usr/share/pyre/noctalia/plugins"
 enabled = true
 
+# The PyreOS menu and the key list, inside the launcher (ADR 0021). Each is
+# a list a pyre command prints, read again whenever the launcher opens.
+# "/pyre" shows the menu on its own (Mod+Alt+Space) and "/keys" the keys
+# (Mod+K); the menu's rows also turn up in an ordinary search, so typing
+# "install", "theme" or "update" finds them next to the apps. Choosing a
+# row hands it back to pyre menu, which only acts on a row it listed.
+[shell.launcher.dmenu.entry.pyre]
+prefix = "pyre"
+label = "PyreOS menu"
+glyph = "flame"
+global = true
+command = "pyre menu --list"
+exec = "pyre menu --pick '{selection}'"
+
+[shell.launcher.dmenu.entry.keys]
+prefix = "keys"
+label = "Keybindings"
+glyph = "keyboard"
+command = "pyre keys --list"
+exec = "true"
+
 # Night light is Noctalia's own blue light filter, and it is off until you
 # turn it on. Mod+Ctrl+N holds the warm light on at once. The control
 # center's button and the settings follow a schedule instead, and this is

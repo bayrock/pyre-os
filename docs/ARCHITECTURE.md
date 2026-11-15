@@ -145,7 +145,7 @@ Each include mechanism is verified for real in P3 before it is relied on.
 
 ### Default applications
 
-The default set is lean. Everything else is an optional bundle.
+The default set is lean (ADR 0021). Everything else is an optional install: an app from the PyreOS menu's catalog, or a bundle.
 
 | Role | Default |
 |---|---|
@@ -154,9 +154,9 @@ The default set is lean. Everything else is an optional bundle.
 | File manager | Nautilus |
 | Editor | neovim with a minimal config; LazyVim is offered as a bundle |
 | Screenshots | niri's built-in screenshot UI |
-| Recording | gpu-screen-recorder, toggled by `pyre-record` (portal capture) |
-| Media | mpv, imv, Papers |
-| CLI tools | btop, fastfetch, fzf, ripgrep, bat, eza, zoxide, starship |
+| Recording | `pyre-record` toggles gpu-screen-recorder (portal capture), an optional install; without it, the key says where to find it |
+| Media | none by default: mpv, imv and Papers are in the catalog |
+| CLI tools | btop, fastfetch, fzf, eza, zoxide, starship; bat and ripgrep are in the catalog |
 
 Bundles are meta-packages: `pyre-bundle-dev`, `-media` and `-office`. `pyre install <bundle>` adds one, and `pyre remove <bundle>` takes it away with the apps nothing else needs. Two bundles are still to come:
 
@@ -187,6 +187,14 @@ The installer will offer bundles once the TUI is exercised.
 - "Welcome home.": the theme buttons (`pyre theme set`), the main keys, updates, `pyre doctor`, the shell settings, and the user guide (`docs/guide/`, installed to `/usr/share/doc/pyre/guide/`) rendered in place. Every color is a palette role, so it recolors with the theme.
 - `pyre welcome` opens it. niri runs `pyre welcome --first-login` at login, which opens it once (or at every login, `--at-login on`); the launcher lists it as "Welcome to PyreOS".
 
+### Keymap, key list and the PyreOS menu (ADR 0021)
+
+- **The keymap** (`defaults/niri/binds.kdl`) follows macOS and the Hyprland-based Arch desktops wherever niri has the same action; niri-only actions sit on the keys those leave free. Every bind is one line with a `hotkey-overlay-title`, which is its description everywhere.
+- **`pyre keys`** lists the keys from that file and the user's `config.kdl`. `tools/keys-doc` writes the "Every key" section of `docs/KEYBINDINGS.md` from the same parser, and a bats test fails when they differ.
+- **`pyre menu`** is the PyreOS menu: update, install and remove (the catalog `src/cli/menu/catalog.tsv`, the bundles, a repository search), themes, style, setup, learn, system. The rows come from `src/cli/menu/menu.tsv`, installed to `/usr/share/pyre/menu/`. The data names one of a fixed set of actions per row and never holds a command; installs run in a floating terminal.
+- **In the launcher,** two dmenu providers in `defaults/noctalia/pyre.toml` show them: `/pyre` (also part of the ordinary search) and `/keys`. `Mod+Alt+Space` and `Mod+K` open the launcher on them.
+- `tools/check-catalog` checks, against a sync database, that every catalog package is in `core` or `extra`.
+
 ### Remind me (`src/cli/commands/remind`, `src/desktop/remind/`, ADR 0020)
 
 - `pyre remind <when> [message]` sets a reminder: `10m tea`, `5pm call mum`, `tomorrow 9am standup`, or the time last, `call mum in 2 hours`. `pyre remind list` and `pyre remind cancel` manage them.
@@ -196,7 +204,7 @@ The installer will offer bundles once the TUI is exercised.
 ### CLI (`src/cli/`, package `pyre-cli`)
 
 - **One entrypoint,** `pyre <command>` (ADR 0014). Commands are files in `/usr/lib/pyre/commands/` with `# help:` and `# usage:` header metadata. The shared library is in `/usr/lib/pyre/lib/`, and the reconcile units are in `/usr/lib/pyre/reconcile/{system,user}/`.
-- **Commands:** `update`, `snapshot`, `rollback`, `doctor`, `reconcile`, `hw`, `install`/`remove <bundle>`, `theme`, `welcome`, `remind`, `help`.
+- **Commands:** `update`, `snapshot`, `rollback`, `doctor`, `reconcile`, `hw`, `install`/`remove <bundle>`, `theme`, `keys`, `menu`, `welcome`, `remind`, `help`.
 - **Triggers:** an ALPM hook (`pyre-reconcile.hook`) runs system reconcile after `pyre-*` packages change, and `pyre-reconcile.service` (a user unit enabled globally) runs user reconcile at login. `pyre-remind.service` sets the reminders' timers when the desktop starts.
 - **Budget:** under 5,000 lines total for the CLI plus the installer before 1.0. Every command needs a test, and anything over budget needs a reason in its ADR.
 

@@ -11,7 +11,7 @@ local KEYS = {
   { "Super + Enter", "Open a terminal" },
   { "Super + S", "Control center" },
   { "Super + O", "See every window" },
-  { "Super + Shift + /", "Show all the keys" },
+  { "Super + K", "Show all the keys" },
 }
 
 local state = {

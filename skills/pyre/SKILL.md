@@ -6,8 +6,8 @@ description: >
   ~/.bashrc, GTK or btop; keybindings, monitors and outputs, window rules, gaps,
   the bar, launcher, notifications, lock and idle, wallpaper, themes and colors;
   screenshots and screen recording; installing software and bundles; and the
-  pyre command: pyre update, snapshots, rollback, doctor, theme, reminders,
-  hardware rules, the welcome panel. Triggers: PyreOS, pyre, niri, Noctalia, foot,
+  pyre command: pyre update, snapshots, rollback, doctor, theme, the PyreOS
+  menu, the key list, reminders, hardware rules, the welcome panel. Triggers: PyreOS, pyre, niri, Noctalia, foot,
   snapper, Limine, "after an update", "roll back", "my screen", "my keys".
   Not for developing PyreOS itself.
 ---
@@ -68,6 +68,8 @@ The rest is stock Arch Linux: pacman, systemd, PipeWire, NetworkManager, bluez, 
 | `pyre doctor` | Checks kernels, boot entries, snapshots and PyreOS state, and says what to do about each problem |
 | `pyre theme` | Lists the themes; `pyre theme set <name>` switches, live |
 | `pyre install`, `pyre remove` | Adds or removes a bundle of apps: `dev`, `media`, `office` |
+| `pyre menu` | Opens the PyreOS menu in the launcher (**Super + Alt + Space**): optional apps to install or remove, update, themes, settings, system. `pyre menu --list` prints its rows |
+| `pyre keys` | Opens the key list (**Super + K**); `pyre keys --list` prints every key with what it does, the user's own binds included |
 | `pyre hw` | Shows the hardware rules that match this machine; `pyre hw apply` installs their drivers and settings |
 | `pyre reconcile` | Applies PyreOS's own changes after an update. It runs by itself; `--dry-run` shows what it would do |
 | `pyre remind` | Sets a reminder: `pyre remind 10m tea`, `pyre remind tomorrow 9am standup`; `pyre remind list` and `pyre remind cancel` manage them. In the launcher it is `/remind 10m tea` |
@@ -89,16 +91,16 @@ The rest is stock Arch Linux: pacman, systemd, PipeWire, NetworkManager, bluez, 
 ## Choosing the right tool
 
 1. **Is there a `pyre` command for it?** Use it: themes, updates, snapshots, bundles, system checks.
-2. **Is it a shell setting** (bar, dock, wallpaper, night light, notifications, idle)? It is Noctalia's: see [`noctalia.md`](noctalia.md). The user can also open the settings window with **Super + Shift + ,**.
+2. **Is it a shell setting** (bar, dock, wallpaper, night light, notifications, idle)? It is Noctalia's: see [`noctalia.md`](noctalia.md). The user can also open the settings window from the launcher: `shell settings`.
 3. **Is it about windows, keys, screens or input?** It is niri's: see [`niri.md`](niri.md).
-4. **Is it a package?** `sudo pacman -S <package>`. PyreOS installs no AUR helper; do not assume `paru` or `yay` exists, and do not install one unasked.
+4. **Is it a package?** `sudo pacman -S <package>`. The default install is small on purpose: no video player, image viewer, document viewer or screen recorder. The launcher's **Install** rows offer those and more (the catalog is `/usr/share/pyre/menu/catalog.tsv`), and the user may prefer picking there. PyreOS installs no AUR helper; do not assume `paru` or `yay` exists, and do not install one unasked.
 5. **Is something broken?** Start with `pyre doctor`, then [`lifecycle.md`](lifecycle.md).
 6. **Anything else** is plain Arch Linux.
 
 ## Examples
 
 - "Switch to the light theme" → `pyre theme set birch`
-- "Make Super+T open a terminal" → add a `binds { Mod+T { spawn "foot"; } }` block below the includes in `~/.config/niri/config.kdl`, then `niri validate`
+- "Make Super+B open the browser" → add a `binds { Mod+B { spawn "firefox"; } }` block below the includes in `~/.config/niri/config.kdl`, then `niri validate`
 - "Set up my second monitor" → `niri msg outputs`, then an `output` block in `~/.config/niri/config.kdl` ([`niri.md`](niri.md))
 - "Smaller gaps" → `layout { gaps 6; }` in `~/.config/niri/config.kdl`
 - "Lock after five minutes" → override `[idle.behavior.lock]` in `~/.config/noctalia/config.toml` ([`noctalia.md`](noctalia.md))
@@ -109,5 +111,5 @@ The rest is stock Arch Linux: pacman, systemd, PipeWire, NetworkManager, bluez, 
 - "Is my system healthy?" → `pyre doctor`
 - "Remind me to call the bank at 3" → `pyre remind 3pm call the bank`; it arrives as a notification that stays until dismissed
 - "Warmer screen in the evening" → night light: **Super + Ctrl + N** at once, or the schedule in [`noctalia.md`](noctalia.md)
-- "What keys are there?" → `/usr/share/doc/pyre/guide/02-keys.md`, or **Super + Shift + /** on screen
-- "Record my screen" → **Super + Print** starts and stops a recording (`pyre-record`); it is saved in `~/Videos`
+- "What keys are there?" → `pyre keys --list`, or **Super + K** on screen; `/usr/share/doc/pyre/guide/02-keys.md` explains them
+- "Record my screen" → **Alt + Print** starts and stops a recording (`pyre-record`); it is saved in `~/Videos`. The recorder is an optional install: `sudo pacman -S gpu-screen-recorder`, or **Install › Screen recorder** in the launcher

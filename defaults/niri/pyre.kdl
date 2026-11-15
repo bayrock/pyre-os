@@ -80,6 +80,14 @@ window-rule {
     default-window-height { fixed 920; }
 }
 
+// What the PyreOS menu runs in a terminal (installs, updates) floats.
+window-rule {
+    match app-id=r#"^pyre\.menu$"#
+    open-floating true
+    default-column-width { fixed 960; }
+    default-window-height { fixed 640; }
+}
+
 // Portal dialogs, such as the screen-share picker, float.
 window-rule {
     match app-id=r#"^xdg-desktop-portal"#
