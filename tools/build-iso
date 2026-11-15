@@ -81,6 +81,12 @@ sed -e "s|@PYRE_REPO_DIR@|$repo_dir|" \
 if grep -q '^Include = /etc/pacman.d/mirrorlist' "$pacman_conf"; then
   die "pacman.conf still uses the host mirrorlist"
 fi
+# The offline repository gets the same config without the live image's
+# package cache. pacman looks in every cache it knows before it downloads, so
+# a package the live image has too (jq, or m4 from base-devel) was found in
+# that cache and never reached the offline one.
+offline_conf="$build_root/pacman-offline.conf"
+sed '/^CacheDir[[:space:]]*=/d' "$pacman_conf" > "$offline_conf"
 chown "$owner" "$out_dir" "$log_dir"
 log="$log_dir/build-iso-$(date +%Y%m%d-%H%M%S).log"
 : > "$log"
@@ -108,15 +114,16 @@ build_offline_repo() {
   for file in "$repo_dir"/*.pkg.tar.zst; do
     rm -f -- "$offline_cache/${file##*/}" "$offline_cache/${file##*/}.sig"
   done
-  run_logged pacman --config "$pacman_conf" --dbpath "$offline_db" --cachedir "$offline_cache" \
+  run_logged pacman --config "$offline_conf" --dbpath "$offline_db" --cachedir "$offline_cache" \
     -Syw --noconfirm "${wanted[@]}" || return
-  mapfile -t entries < <(pacman --config "$pacman_conf" --dbpath "$offline_db" \
+  mapfile -t entries < <(pacman --config "$offline_conf" --dbpath "$offline_db" \
     -Sp --print-format '%r %f' "${wanted[@]}") || return
   (( ${#entries[@]} )) || { echo "offline repo: no packages resolved" >&2; return 1; }
   for entry in "${entries[@]}"; do
     repo="${entry%% *}"
     file="${entry#* }"
     keep+=("$file")
+    [[ -f "$offline_cache/$file" ]] || { echo "offline repo: $repo/$file was not downloaded" >&2; return 1; }
     cp -l -- "$offline_cache/$file" "$offline_dest/" 2>/dev/null || cp -- "$offline_cache/$file" "$offline_dest/"
     if [[ -f "$offline_cache/$file.sig" ]]; then
       cp -- "$offline_cache/$file.sig" "$offline_dest/"

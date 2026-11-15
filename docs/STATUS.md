@@ -65,6 +65,8 @@ Last updated: 2026-11-15
 - **A `tools/test-e2e --from desktop` run is only valid on a disk nobody has logged into:** a login syncs the user's look to the greeter, and the stage checks the greeter's first-boot state.
 - **Not exercised:** a coding agent signed in and loading the `pyre` skill on PyreOS (Claude Code and Codex were only started for their version); `gh auth login`, which needs an account; the Rust toolchain download.
 
+- **The first ISO build with the dev bundle failed** (2026-11-15) at "offline repo: no signature for core/m4": six of the bundle's packages (m4, flex, groff, which, jq, oniguruma) are also in the live image, pacman found them in the live image's package cache, and so never downloaded them into the offline one. `tools/build-iso` now gives the offline step a config without that cache.
+
 **Carried over** (later phases unless reprioritized):
 
 - **Website (P5, started early):** the landing page lives in `landing/`, and the `pages` workflow publishes it to <https://bayrock.github.io/pyre-os/>. It went live on 2026-11-13 and serves `landing/site/` byte for byte. It was checked locally at 360, 768 and 1280 px in headless Chromium.
