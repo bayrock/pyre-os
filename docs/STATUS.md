@@ -1,10 +1,10 @@
 # Status
 
-Last updated: 2026-11-15
+Last updated: 2026-11-14
 
 ## Current phase
 
-**P6, daily driver on the development machine (active).** Everything about the machine that needs no real hardware is built and passes in VMs. The ISO is one rebuild behind the packages (below), so the order is: rebuild the ISO, run the four ISO tests, then the owner's backups and install (`docs/reference/migration.md`).
+**P6, daily driver on the development machine (active).** Everything about the machine that needs no real hardware is built and passes in VMs, on the ISO itself. Before the owner's backups and install (`docs/reference/migration.md`) comes the development setup of ADR 0022, which changes the installer and so needs one more ISO.
 
 | Step | State | Evidence |
 |---|---|---|
@@ -17,7 +17,7 @@ Last updated: 2026-11-15
 | Autologin keyring (ADR 0018) | Done in the VM | no dialog, `secret-tool` round trip, power-off in seconds |
 | NVIDIA install path | Done in the VM, without the GPU | `tools/test-nvidia`: the rule's packages from the offline repository, DKMS for both kernels in the installer's chroot, the modules in both initramfs images, a normal boot |
 | `pyre hw` on the real GPU | Detection only | read-only on the machine: the RTX 3060 Ti matches `10-nvidia-open` |
-| An ISO with the new packages | **Behind: rebuild before the install.** `pyreos-2026.11.14-x86_64.iso` (sha256 `0ff3ef15…64064568`) passed the four VM tests below, but carries `pyre-cli` 0.3.1 and `pyre-desktop` 0.3.2: the old keymap and default apps, no menu | `tools/build-pkgs && sudo tools/build-iso` (the owner), then the four tests |
+| An ISO with the current packages | Done: `pyreos-2026.11.14-x86_64.iso` (sha256 `633ccb91…dfacba29`, 3.7 GB) carries `pyre-cli` 0.5.0 and `pyre-desktop` 0.5.0 and passed the four ISO tests | "P6 runs" below |
 | Agent skill (ADR 0019) | Done in the VM | `tools/test-e2e`, first boot: `pyre` linked into `~/.claude/skills` and `~/.agents/skills` at the first login |
 | Night light | Done in the VM, without the tint | `tools/test-e2e`, desktop: off by default, the 20:00 to 07:00 schedule, `Mod+Ctrl+N` and the schedule in Noctalia's log. QEMU's display has no gamma table, so the tint waits for the machine |
 | Keymap, key list and PyreOS menu (ADR 0021) | Done in the VM | `tools/test-e2e`, desktop: the config validates; `Mod+K` lists 125 keys and `Mod+Alt+Space` the menu, in the launcher; a row chosen there and one found by the ordinary search both act; `Mod+Escape`, `Mod+Ctrl+L`, `Mod+W`, `Mod+Shift+2` and `Mod+Tab`; no recorder by default and a notice that says where it is, then the recorder installed through the menu's own code path and a recording made |
@@ -26,14 +26,14 @@ Last updated: 2026-11-15
 | Real hardware: driver under niri, 240 Hz and VRR, sleep, Bluetooth, audio, peripherals | Waits for the install | `tools/hw-report` collects it in one run |
 | Migration, then a week of daily use | Waits for the owner | the exit criterion |
 
-**P6 runs** (2026-11-14, on the rebuilt ISO itself, with `pyre-installer` 0.4.0, `pyre-cli` 0.3.1, `pyre-desktop` 0.3.2 and `pyre-base` 0.5.1; the same tests had passed before the rebuild with `--local-packages`):
+**P6 runs** (2026-11-14, on the ISO itself, with `pyre-installer` 0.4.0, `pyre-cli` 0.5.0, `pyre-desktop` 0.5.0 and `pyre-base` 0.5.1):
 
 - **`tools/build-iso`** ended with `tools/verify-iso`: the root image matches its recorded checksum, and the offline repository in the image is file for file what was staged.
 - **`tools/test-iso`:** passed on UEFI and BIOS.
-- **`tools/test-e2e`:** every stage, 94 checks in 9 min 25 s.
-- **`tools/test-machine`:** all four stages, 74 checks in 7 min 41 s. The interactive installer, typed at the keyboard, onto a disk that held an MBR table, FAT and LUKS, next to a stand-in Windows disk; then every row marked "Done in the VM" above. The desktop powered off in 4 s.
-- **`tools/test-nvidia`:** both stages, 20 checks in 13 min 13 s. The installer applied the NVIDIA rule with no failed hook and no snapshots; DKMS built `nvidia-open` 620.70.06 for both kernels; each initramfs holds the four modules; the system boots and unlocks; a second apply changes nothing, and an apply without the GPU removes the drop-ins.
-- **After that ISO** (2026-11-14, `--local-packages`, with `pyre-cli` 0.5.0 and `pyre-desktop` 0.5.0: the keymap, key list and menu, on top of the agent skill, night light and reminders): `tools/test-e2e` passed every stage from a fresh install, 124 checks. On overlays of that install, `tools/test-remind` passed 45 checks, `tools/test-theme` 83 and `tools/test-visual` 38, with the welcome panel, its guide and every theme captured. `test-machine` and `test-nvidia` have not run with these packages; they run on the rebuilt ISO.
+- **`tools/test-e2e`:** every stage, 123 checks, from an offline install: the keymap, the key list, the menu and an install from it, night light, the agent skill, a snapshot boot and a rollback.
+- **`tools/test-machine`:** all four stages, 74 checks. The interactive installer, typed at the keyboard, onto a disk that held an MBR table, FAT and LUKS, next to a stand-in Windows disk; then every row marked "Done in the VM" above.
+- **`tools/test-nvidia`:** both stages, 20 checks. The installer applied the NVIDIA rule with no failed hook and no snapshots; DKMS built the driver for both kernels; each initramfs holds the four modules; the system boots and unlocks; a second apply changes nothing, and an apply without the GPU removes the drop-ins.
+- **With `--local-packages` before the rebuild**, on overlays of an e2e install with the same packages: `tools/test-remind` passed 45 checks, `tools/test-theme` 83 and `tools/test-visual` 38, with the welcome panel, its guide and every theme captured.
 - **CI** is green on `main` (check, packages and publish), and the testing channel carries `pyre-cli` 0.5.0 and `pyre-desktop` 0.5.0 since 2026-11-15.
 - **`tools/check`:** passes, with new bats tests for the swapfile and resume arguments, ESP detection, the autologin keyring, the resume-offset check, `HW_SYS`, and the boot-branding hook before Limine exists.
 
@@ -62,7 +62,7 @@ Last updated: 2026-11-15
 - **Untested paths:** real hardware (only QEMU with OVMF), including Bluetooth adapters; installing next to another system on the same disk (out of scope, ADR 0008).
 - **Not built yet:** bundles in the installer.
 - **Repository:** the `testing` channel is live (below). There is no `stable` channel or promotion script yet (P7), and installs from ISOs built before `pyre-release` 0.3.0 have no `[pyre]` server.
-- **Sizes:** the ESP is 2 GiB, while limine-snapper-sync recommends 4 GiB (entries are pruned at 85% usage). With the NVIDIA modules each initramfs is 102 MB, and a fresh install uses 320 MiB of the ESP (16%). The ISO is now 3.0 GB, 1.4 GB of it the offline repo.
+- **Sizes:** the ESP is 2 GiB, while limine-snapper-sync recommends 4 GiB (entries are pruned at 85% usage). With the NVIDIA modules each initramfs is 102 MB, and a fresh install uses 320 MiB of the ESP (16%). The ISO is 3.7 GB.
 - **limine-snapper-sync 1.32.1 rough edges** (worth reporting upstream): each prompt wraps stdin in a new buffered reader and spins on EOF; it calls `stty` on `/dev/tty`, so it stops outside the foreground process group; it writes the backup's `info.xml` without fsync, so a power cut right after a restore leaves an orphaned backup.
 - **From P3:** users created after install get bash's own `.bashrc` (P4 user reconcile, ADR 0013). Turning autologin on after the install does not create the passwordless keyring (ADR 0018).
 - **From P4:** the `-gaming` and `-lazyvim` bundles are deferred. `[pyre]` is hosted on the `testing` channel since 2026-11-13.
