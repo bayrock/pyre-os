@@ -18,6 +18,9 @@ Last updated: 2026-11-14
 | NVIDIA install path | Done in the VM, without the GPU | `tools/test-nvidia`: the rule's packages from the offline repository, DKMS for both kernels in the installer's chroot, the modules in both initramfs images, a normal boot |
 | `pyre hw` on the real GPU | Detection only | read-only on the machine: the RTX 3060 Ti matches `10-nvidia-open` |
 | An ISO with the new packages | Done: `pyreos-2026.11.14-x86_64.iso`, sha256 `0ff3ef15…64064568` | built and verified by `tools/build-iso` (the third build of the day; see below), and the four VM tests below |
+| Agent skill (ADR 0019) | Done in the VM | `tools/test-e2e`, first boot: `pyre` linked into `~/.claude/skills` and `~/.agents/skills` at the first login |
+| Night light | Done in the VM, without the tint | `tools/test-e2e`, desktop: off by default, the 20:00 to 07:00 schedule, `Mod+Ctrl+N` and the schedule in Noctalia's log. QEMU's display has no gamma table, so the tint waits for the machine |
+| Remind me (ADR 0020) | Done in the VM | `tools/test-remind`: `/remind 3h …` and plain "remind me …" in the launcher, `pyre remind` in a terminal, a reminder that fires and stays, one cancelled from the launcher, and one that came due while the machine was off, shown at the next login |
 | The author's overlay | Scaffolded, untested on the machine | a local repository outside this one (`../pyre-overlay`): outputs, keys, foot, mpv, package lists |
 | Real hardware: driver under niri, 240 Hz and VRR, sleep, Bluetooth, audio, peripherals | Waits for the install | `tools/hw-report` collects it in one run |
 | Migration, then a week of daily use | Waits for the owner | the exit criterion |
@@ -29,7 +32,8 @@ Last updated: 2026-11-14
 - **`tools/test-e2e`:** every stage, 94 checks in 9 min 25 s.
 - **`tools/test-machine`:** all four stages, 74 checks in 7 min 41 s. The interactive installer, typed at the keyboard, onto a disk that held an MBR table, FAT and LUKS, next to a stand-in Windows disk; then every row marked "Done in the VM" above. The desktop powered off in 4 s.
 - **`tools/test-nvidia`:** both stages, 20 checks in 13 min 13 s. The installer applied the NVIDIA rule with no failed hook and no snapshots; DKMS built `nvidia-open` 620.70.06 for both kernels; each initramfs holds the four modules; the system boots and unlocks; a second apply changes nothing, and an apply without the GPU removes the drop-ins.
-- **CI** is green on `main`, and the testing channel carries the four new versions.
+- **After that ISO** (2026-11-14, `--local-packages`, with `pyre-cli` 0.4.0 and `pyre-desktop` 0.4.0: the agent skill, night light and reminders): `tools/test-e2e` passed every stage from a fresh install, 100 checks. `tools/test-remind` passed 45 checks on an overlay of that install. The ISO does not carry these two packages yet.
+- **CI** was green on `main` at the ISO's versions, and the testing channel carries those four.
 - **`tools/check`:** passes, with new bats tests for the swapfile and resume arguments, ESP detection, the autologin keyring, the resume-offset check, `HW_SYS`, and the boot-branding hook before Limine exists.
 
 **Found on the way:**
@@ -44,6 +48,7 @@ Last updated: 2026-11-14
 - **Two defects the NVIDIA install showed,** both fixed: the driver transaction ran after snap-pac without `SNAP_PAC_SKIP`, so such an install began with a snapshot pair; and `pyre-base`'s boot-branding hook failed during every install, because it ran before `/etc/default/limine` existed (`pyre-base` 0.5.1).
 - **One ISO build produced a damaged image** (2026-11-14): one bit of one offline package differed from the cached file, which itself still verifies. The squashfs matched its recorded checksum and the ISO on disk matched its cached copy, so the bit flipped while the image was being built; the host logged no machine-check or filesystem error. pacman's signature check stopped the install at that package. `tools/build-iso` now ends with `tools/verify-iso` and removes an image that fails. If it happens again, test the development machine's memory.
 - **A build without enough disk space** failed in xorriso after removing the previous ISO of the same date; `tools/build-iso` now needs 12 GiB free before it starts.
+- **Three VM tests at once ran the development machine out of memory** (2026-11-14): three sessions in three worktrees each started an install test, and `systemd-oomd` ended the editor and every session in it. Every VM test and `tools/run-vm` now takes one lock for the whole machine (`tools/lib/vmlock.sh`), so a second job waits or is refused.
 - **The serial log sometimes shows a character of the guest's output twice** (its input arrived intact in 150 long commands). When it hit a probe's end marker the probe never finished. Markers now match with any character doubled (`tools/lib/vmtest.sh`).
 
 **Carried over** (later phases unless reprioritized):

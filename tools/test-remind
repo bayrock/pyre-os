@@ -47,6 +47,7 @@ cp -- "$base/OVMF_VARS.4m.fd" "$vm_dir/"
 
 layout=1280x800   # one output
 reminders=/home/$user/.local/state/pyre/reminders
+nlog=/home/$user/.cache/noctalia/noctalia.log
 
 # launcher TEXT: open the launcher and type TEXT.
 launcher() {
@@ -61,7 +62,7 @@ start_vm install-packages --boot-disk
 unlock_and_login
 expect share 'mkdir -p /mnt/share && mount -t 9p -o trans=virtio pyre-share /mnt/share && echo mounted' '^mounted$'
 expect install 'pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-remind-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-remind-install.log' '^rc=0$'
-expect plugin-files 'ls /usr/share/pyre/noctalia/plugins/remind | tr "\n" " "' '^plain\.luau plugin\.toml prefixed\.luau remind\.luau $'
+expect plugin-files 'ls /usr/share/pyre/noctalia/plugins/remind | tr "\n" " "; echo' '^plain\.luau plugin\.toml prefixed\.luau remind\.luau $'
 expect login-unit 'readlink /usr/lib/systemd/user/graphical-session.target.wants/pyre-remind.service' '^\.\./pyre-remind\.service$'
 power_off
 
@@ -73,7 +74,7 @@ probe welcome-close 'u noctalia msg panel-close pyre/welcome:welcome' >/dev/null
 expect plugin 'u noctalia msg plugins list 2>&1 | grep -c "pyre/remind"' '^[1-9]'
 # The login unit ran with the desktop, with nothing to set yet.
 expect login-unit-ran 'for _ in $(seq 30); do [ -n "$(u systemctl --user show pyre-remind.service -p ExecMainExitTimestamp --value)" ] && break; sleep 1; done; u systemctl --user show pyre-remind.service -p ExecMainExitTimestamp' '^ExecMainExitTimestamp=.+'
-expect login-unit-result 'u systemctl --user show pyre-remind.service -p Result -p ExecMainStatus | sort | tr "\n" " "' '^ExecMainStatus=0 Result=success $'
+expect login-unit-result 'u systemctl --user show pyre-remind.service -p Result -p ExecMainStatus | sort | tr "\n" " "; echo' '^ExecMainStatus=0 Result=success $'
 expect nothing-pending 'u pyre remind list | wc -l' '^0$'
 
 # Behind the prefix: the row shows the time it read, Enter sets it.
@@ -118,8 +119,9 @@ expect cancelled 'u pyre remind list' '^1[[:space:]]+.*[[:space:]]+water the pla
 expect cancelled-only-that 'u pyre remind list | wc -l' '^1$'
 expect cancelled-timer 'u systemctl --user is-active pyre-remind-2.timer; true' '^inactive$'
 
-# The shell reported no trouble with the plugin.
-expect plugin-quiet 'journalctl -b -o cat _UID=$(id -u '"$user"') | grep -i "pyre/remind" | grep -ci -e error -e warn -e fail || true' '^0$'
+# The shell reported no trouble with the plugin, in its own log file (it
+# does not log to the journal).
+expect plugin-quiet "grep -a -i remind $nlog | grep -c -e '\\[ERR\\]' -e '\\[WRN\\]' || true" '^0$'
 
 # --- 3. a reminder that comes due while the machine is off -----------------------
 expect missed-set 'u pyre remind 40s the kettle' 'reminder 2 set for '
@@ -133,6 +135,6 @@ expect missed-shown 'u niri msg layers | grep -c noctalia-notification' '^[1-9]'
 shot remind-missed
 expect waiting-timer 'u systemctl --user is-active pyre-remind-1.timer' '^active$'
 expect waiting-kept 'u pyre remind list' '^1[[:space:]]+.*[[:space:]]+water the plants$'
-probe evidence 'cp /var/log/test-remind-install.log /mnt/share/ 2>/dev/null; journalctl -b -o cat _UID=$(id -u '"$user"') | grep -i -e remind > /mnt/share/journal-remind.log; true' >/dev/null
+probe evidence 'cp /var/log/test-remind-install.log /mnt/share/ 2>/dev/null; journalctl -b -o cat _UID=$(id -u '"$user"') | grep -i -e remind > /mnt/share/journal-remind.log; grep -a -i remind '"$nlog"' > /mnt/share/noctalia-remind.log; true' >/dev/null
 power_off
 printf '%s: PASS (screenshots in %s)\n' "$tool" "$vm_dir/share"
