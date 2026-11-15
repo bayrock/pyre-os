@@ -4,7 +4,7 @@ Last updated: 2026-11-15
 
 ## Current phase
 
-**P6, daily driver on the development machine (active).** Everything about the machine that needs no real hardware is built and passes in VMs. The ISO is one rebuild behind the packages: the development setup (ADR 0022) changed the installer and put the dev bundle on the image. So the order is: rebuild the ISO, run the ISO tests, then the owner's backups and install (`docs/reference/migration.md`).
+**P6, daily driver on the development machine (active).** Everything about the machine that needs no real hardware is built and passes in VMs, on the ISO itself. What is left is the owner's: the backups and the install (`docs/reference/migration.md`), then what only hardware shows.
 
 | Step | State | Evidence |
 |---|---|---|
@@ -17,28 +17,26 @@ Last updated: 2026-11-15
 | Autologin keyring (ADR 0018) | Done in the VM | no dialog, `secret-tool` round trip, power-off in seconds |
 | NVIDIA install path | Done in the VM, without the GPU | `tools/test-nvidia`: the rule's packages from the offline repository, DKMS for both kernels in the installer's chroot, the modules in both initramfs images, a normal boot |
 | `pyre hw` on the real GPU | Detection only | read-only on the machine: the RTX 3060 Ti matches `10-nvidia-open` |
-| An ISO with the current packages | **Behind: rebuild before the install.** `pyreos-2026.11.14-x86_64.iso` (sha256 `633ccb91…dfacba29`, 3.7 GB) passed the four ISO tests with `pyre-cli` 0.5.0 and `pyre-desktop` 0.5.0, but has the installer without the development questions and no dev bundle in its offline repository | `tools/build-pkgs && sudo tools/build-iso` (the owner), then the four tests and `tools/test-dev` |
+| An ISO with the current packages | Done: `pyreos-2026.11.15-x86_64.iso` (sha256 `4766cf2e…6f370e4602b1`, 3.8 GB) carries `pyre-cli` 0.6.0, `pyre-desktop` 0.6.0 and `pyre-installer` 0.5.0, with the dev bundle in its offline repository, and passed the five tests | "P6 runs" below |
 | Agent skill (ADR 0019) | Done in the VM | `tools/test-e2e`, first boot: `pyre` linked into `~/.claude/skills` and `~/.agents/skills` at the first login |
 | Night light | Done in the VM, without the tint | `tools/test-e2e`, desktop: off by default, the 20:00 to 07:00 schedule, `Mod+Ctrl+N` and the schedule in Noctalia's log. QEMU's display has no gamma table, so the tint waits for the machine |
 | Keymap, key list and PyreOS menu (ADR 0021) | Done in the VM | `tools/test-e2e`, desktop: the config validates; `Mod+K` lists 125 keys and `Mod+Alt+Space` the menu, in the launcher; a row chosen there and one found by the ordinary search both act; `Mod+Escape`, `Mod+Ctrl+L`, `Mod+W`, `Mod+Shift+2` and `Mod+Tab`; no recorder by default and a notice that says where it is, then the recorder installed through the menu's own code path and a recording made |
 | Remind me (ADR 0020) | Done in the VM | `tools/test-remind`: `/remind 3h …` and plain "remind me …" in the launcher, `pyre remind` in a terminal, a reminder that fires and stays, one cancelled from the launcher, and one that came due while the machine was off, shown at the next login |
-| Development setup (ADR 0022) | Done in the VM, except the tools at install | `tools/test-e2e`: a git identity from the installer's config, in the user's `~/.config/git/config` with the keyring as the store; `~/.local/bin` on the session's `PATH`. `tools/test-machine`: the name, the email and the tools question typed into the installer. `tools/test-dev`: "Set up for development" in the welcome panel and `git` in the launcher both open `pyre dev`; a name and email typed there; a secret stored and read back through the keyring; Codex installed from the menu; Claude Code 2.1.325 installed by the vendor row as the user, run, and removed with its settings kept; Docker's socket enabled on a yes. The yes to the tools needs the dev bundle on the ISO, so it runs after the rebuild |
+| Development setup (ADR 0022) | Done in the VM | `tools/test-e2e`: a git identity from the installer's config, in the user's `~/.config/git/config` with the keyring as the store; `~/.local/bin` on the session's `PATH`. `tools/test-machine`: the name, the email and a yes to the tools typed into the installer; the bundle's compilers, GitHub CLI, Go, Node.js, uv and rustup are installed at the first boot. `tools/test-dev`: "Set up for development" in the welcome panel and `git` in the launcher both open `pyre dev`; a name and email typed there; a secret stored and read back through the keyring; Codex installed from the menu; Claude Code 2.1.325 installed by the vendor row as the user, run, and removed with its settings kept; Docker's socket enabled on a yes. With a yes to the tools, the bundle installs from the ISO's offline repository, with no network |
 | The author's overlay | Scaffolded, untested on the machine | a local repository outside this one (`../pyre-overlay`): outputs, keys, foot, mpv, package lists |
 | Real hardware: driver under niri, 240 Hz and VRR, sleep, Bluetooth, audio, peripherals | Waits for the install | `tools/hw-report` collects it in one run |
 | Migration, then a week of daily use | Waits for the owner | the exit criterion |
 
-**P6 runs** (2026-11-14, on the ISO itself, with `pyre-installer` 0.4.0, `pyre-cli` 0.5.0, `pyre-desktop` 0.5.0 and `pyre-base` 0.5.1):
+**P6 runs** (2026-11-15, on the ISO itself, with `pyre-installer` 0.5.0, `pyre-cli` 0.6.0, `pyre-desktop` 0.6.0 and `pyre-base` 0.5.1):
 
 - **`tools/build-iso`** ended with `tools/verify-iso`: the root image matches its recorded checksum, and the offline repository in the image is file for file what was staged.
 - **`tools/test-iso`:** passed on UEFI and BIOS.
-- **`tools/test-e2e`:** every stage, 123 checks, from an offline install: the keymap, the key list, the menu and an install from it, night light, the agent skill, a snapshot boot and a rollback.
-- **`tools/test-machine`:** all four stages, 74 checks. The interactive installer, typed at the keyboard, onto a disk that held an MBR table, FAT and LUKS, next to a stand-in Windows disk; then every row marked "Done in the VM" above.
+- **`tools/test-e2e`:** every stage, 129 checks, from an offline install: a git identity from the installer's config, `~/.local/bin` on `PATH`, the keymap, the key list, the menu and an install from it, night light, the agent skill, a snapshot boot and a rollback.
+- **`tools/test-machine`:** all four stages, 80 checks. The interactive installer, typed at the keyboard, with a git name and email and a yes to the development tools, which installed from the offline repository; onto a disk that held an MBR table, FAT and LUKS, next to a stand-in Windows disk; then every row marked "Done in the VM" above.
 - **`tools/test-nvidia`:** both stages, 20 checks. The installer applied the NVIDIA rule with no failed hook and no snapshots; DKMS built the driver for both kernels; each initramfs holds the four modules; the system boots and unlocks; a second apply changes nothing, and an apply without the GPU removes the drop-ins.
-- **With `--local-packages` before the rebuild**, on overlays of an e2e install with the same packages: `tools/test-remind` passed 45 checks, `tools/test-theme` 83 and `tools/test-visual` 38, with the welcome panel, its guide and every theme captured.
+- **`tools/test-dev`:** 49 checks, on an overlay of that e2e install, with a network: the row in the development table above.
+- **With `--local-packages` before the rebuild**, on overlays of an e2e install with the same packages: `tools/test-theme` passed 83 checks and `tools/test-visual` 38, with the welcome panel and its new action captured. `tools/test-remind` last ran with `pyre-cli` 0.5.0 (45 checks).
 - **CI** is green on `main` (check, packages and publish), and the testing channel carries `pyre-cli` 0.6.0, `pyre-desktop` 0.6.0 and `pyre-installer` 0.5.0 since 2026-11-15.
-- **`tools/check`:** passes, with new bats tests for the swapfile and resume arguments, ESP detection, the autologin keyring, the resume-offset check, `HW_SYS`, and the boot-branding hook before Limine exists.
-
-- **After that ISO** (2026-11-15, `--local-packages`, with `pyre-cli` 0.6.0, `pyre-desktop` 0.6.0 and `pyre-installer` 0.5.0: the development setup): `tools/test-e2e` passed every stage from a fresh install, 130 checks. `tools/test-machine --no-dev-tools` passed all four stages, 80 checks, with the three new prompts typed. On overlays of the e2e install, `tools/test-dev` passed 49 checks, `tools/test-theme` 83 and `tools/test-visual` 38, with the welcome panel and its new action captured.
 
 **Found on the way:**
 
