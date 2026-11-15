@@ -5,12 +5,15 @@
 # and no field holds a quote or a backslash.
 #
 # A verb ending in -list stands for the rows "pyre menu" makes itself, in that
-# place: the optional apps and bundles, and the themes.
+# place: the optional apps and bundles, and the themes. A vendor row is an app
+# from outside the Arch repositories that its maker installs into the home
+# (ADR 0022). Its argument names an installer that pyre menu holds itself.
 Update › Update the system	Snapshots first, then every package, then a boot check	term	update
 Remind me…	Set a reminder: 10m tea, 5pm call mum	launcher	/remind 
 Install › Find a package…	Search everything in the Arch repositories	search	
 Install › Find in the AUR…	Search the AUR with the helper you installed	aur	
 Install		install-list	
+Install › Claude Code	The coding agent from Anthropic, by its own installer (proprietary)	vendor	claude
 Remove		remove-list	
 Theme		theme-list	
 Style › Wallpaper	Pick a wallpaper	panel	wallpaper
@@ -18,6 +21,7 @@ Style › Night light	Warmer screen colors, on or off	nightlight
 Style › Shell settings	The bar, the dock, notifications, night light and more	settings	
 Setup › Screens, keys and windows	Your niri config, in the editor	edit	niri
 Setup › Shell config	Your Noctalia config, in the editor	edit	noctalia
+Setup › Development	Git identity, the development tools and GitHub	term	dev
 Setup › Hardware	The hardware rules that match this machine	term	hw
 Setup › Check the system	Kernels, boot entries, snapshots and PyreOS state	term	doctor
 Learn › Keybindings	Every shortcut, searchable	launcher	/keys 

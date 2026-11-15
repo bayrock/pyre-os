@@ -22,6 +22,9 @@ Helix	A modal editor for the terminal	helix
 Zed	A fast graphical code editor	zed
 Code - OSS	The open source build of VS Code	code
 Emacs	The extensible editor	emacs
+Codex	The coding agent from OpenAI, for the terminal	openai-codex
+opencode	An open source coding agent for the terminal	opencode
+Gemini CLI	The coding agent from Google, for the terminal	gemini-cli
 Alacritty	A GPU-accelerated terminal	alacritty
 Kitty	A terminal with tabs, splits and images	kitty
 Ghostty	A fast, native terminal	ghostty
@@ -36,4 +39,5 @@ Podman	Containers without a daemon	podman
 Distrobox	Any Linux distribution inside your terminal	distrobox
 Terminal tools	bat, ripgrep and fd: a better cat, grep and find	bat ripgrep fd
 tmux	Terminal multiplexer	tmux
+mise	Tool versions per project: Node, Python, Ruby and more	mise
 Yazi	A file manager for the terminal	yazi

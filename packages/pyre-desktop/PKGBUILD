@@ -4,7 +4,7 @@
 # stubs are in defaults/ and skel/ of this repository, so the package is built
 # in place.
 pkgname=pyre-desktop
-pkgver=0.5.0
+pkgver=0.6.0
 pkgrel=1
 pkgdesc='PyreOS desktop: niri, Noctalia, session services, default apps and defaults'
 arch=(any)
@@ -15,8 +15,9 @@ depends=(
   # pyre welcome and the themes' banners, for the welcome panel; pyre remind,
   # for the launcher's reminders (ADR 0020); the agent skill the guide
   # mentions (ADR 0019); pyre menu and pyre keys, which the launcher and the
-  # keymap call (ADR 0021)
-  'pyre-cli>=0.5.0'
+  # keymap call (ADR 0021); pyre dev, which the welcome panel and the menu
+  # run (ADR 0022)
+  'pyre-cli>=0.6.0'
   'pyre-themes>=0.3.0'
   # Session: compositor, shell, greeter, X11 apps, portals
   niri
@@ -42,8 +43,12 @@ depends=(
   firefox
   nautilus
   neovim
-  # CLI tools: the system monitor, and what the default prompt and the menu use
+  # CLI tools: the system monitor, what the default prompt and the menu use,
+  # and git with ssh, which every install has had through other packages and
+  # pyre dev sets up (ADR 0022)
   btop
+  git
+  openssh
   eza
   fastfetch
   fzf
@@ -80,6 +85,8 @@ package() {
   done < <(cd "$root/skel" && find . -type f -printf '%P\0')
   install -Dm644 "$root/system/pam.d/greetd-greeter" "$pkgdir/usr/lib/pam.d/greetd-greeter"
   install -Dm755 "$root/src/desktop/pyre-record" "$pkgdir/usr/bin/pyre-record"
+  # ~/.local/bin on PATH (ADR 0022).
+  install -Dm644 "$root/system/profile.d/pyre-local-bin.sh" "$pkgdir/etc/profile.d/pyre-local-bin.sh"
   # The welcome panel, a Noctalia plugin (ADR 0016), its launcher entry, and
   # the PyreOS mark as the icon os-release names (LOGO=pyreos).
   local plugins="$pkgdir/usr/share/pyre/noctalia/plugins"

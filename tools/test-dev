@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2016 # probes are typed into the guest verbatim
+# The development setup (ADR 0022) on an installed desktop, headless under
+# UEFI: boots a throwaway overlay of an installed test disk (default
+# build/vm/test-e2e), installs the newest local pyre-cli and pyre-desktop,
+# logs in through the greeter, and goes from nothing to set up:
+#   - "Set up for development" in the welcome panel and "Setup › Development"
+#     in the menu both open pyre dev in the floating terminal; the name and
+#     email typed there land in the user's git config, with the keyring as
+#     the credential store
+#   - ~/.local/bin is on the session's PATH and a login shell's
+#   - a coding agent from Arch (Codex) installs from the menu
+#   - the vendor row installs Claude Code with Anthropic's own installer, as
+#     the user, and the row turns into Remove, which leaves the settings
+#   - Docker's install offers to start it
+# The guest has a network device for the downloads. --offline skips them and
+# says so. The base disk is never written.
+# Usage: tools/test-dev [--base NAME] [--offline]
+# Evidence: build/vm/test-dev/share/desktop-dev-*.png
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+tool=test-dev
+name=test-dev
+base_name=test-e2e
+offline=0
+while (( $# )); do
+  case "$1" in
+    --base) base_name="${2:?--base needs a VM name}"; shift 2 ;;
+    --offline) offline=1; shift ;;
+    -h|--help) sed -n '3,19s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) echo "$tool: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+# shellcheck source=tools/lib/vmtest.sh
+source "$repo_root/tools/lib/vmtest.sh"
+
+base="$repo_root/build/vm/$base_name"
+[[ -f "$base/disk.qcow2" && -f "$base/OVMF_VARS.4m.fd" ]] ||
+  { echo "$tool: no installed disk in $base; run tools/test-e2e first" >&2; exit 1; }
+if [[ -f "$base/qemu.pid" ]] && kill -0 "$(<"$base/qemu.pid")" 2>/dev/null; then
+  echo "$tool: $base_name is running; stop it first" >&2; exit 1
+fi
+
+shopt -s nullglob
+rm -rf -- "$vm_dir"
+mkdir -p -- "$vm_dir/share/pkgs"
+for pkg in pyre-cli pyre-desktop; do
+  files=("$repo_root"/build/repo/"$pkg"-[0-9]*.pkg.tar.zst)
+  (( ${#files[@]} )) || { echo "$tool: no $pkg in build/repo; run tools/build-pkgs" >&2; exit 1; }
+  cp -- "${files[-1]}" "$vm_dir/share/pkgs/"
+  [[ -f "${files[-1]}.sig" ]] && cp -- "${files[-1]}.sig" "$vm_dir/share/pkgs/"
+done
+qemu-img create -q -f qcow2 -b "$base/disk.qcow2" -F qcow2 "$vm_dir/disk.qcow2"
+cp -- "$base/OVMF_VARS.4m.fd" "$vm_dir/"
+
+layout=1280x800   # one output (vm-ctl click)
+home=/home/$user
+gitconfig=$home/.config/git/config
+# The user's own view: their home, and a login shell where PATH matters.
+as_user="u env HOME=$home GIT_TERMINAL_PROMPT=0"
+
+# launcher TEXT: open the launcher and type TEXT.
+launcher() {
+  send_keys meta_l-spc
+  sleep 2
+  type_keys "$1"
+  sleep 3
+}
+
+# menu_window: wait for the menu's floating terminal.
+menu_window() {
+  expect "$1" 'for _ in $(seq 20); do u niri msg windows | grep -q "App ID: \"pyre.menu\"" && break; sleep 1; done; u niri msg windows | grep -c "App ID: \"pyre.menu\""' '^1$'
+}
+
+menu_window_gone() {
+  expect "$1" 'for _ in $(seq 20); do u niri msg windows | grep -q "App ID: \"pyre.menu\"" || break; sleep 1; done; u niri msg windows | grep -c "App ID: \"pyre.menu\""; true' '^0$'
+}
+
+# --- 1. install the packages on the console, before anyone logs in ---------------
+net=()
+(( offline )) || net=(--net)
+start_vm install-packages "${net[@]}" --boot-disk
+unlock_and_login
+expect share 'mkdir -p /mnt/share && mount -t 9p -o trans=virtio pyre-share /mnt/share && echo mounted' '^mounted$'
+expect install 'pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-dev-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-dev-install.log' '^rc=0$'
+expect profile 'cat /etc/profile.d/pyre-local-bin.sh | grep -c "local/bin"' '^[1-9]'
+# Start from nothing: no git settings, whatever the base disk's install wrote.
+expect no-identity 'rm -rf '"$home"'/.config/git '"$home"'/.gitconfig; ls '"$home"'/.config/git 2>/dev/null | wc -l' '^0$'
+power_off
+
+# --- 2. log in; the welcome panel and the menu open pyre dev ---------------------
+start_vm session "${net[@]}" --boot-disk
+unlock_and_login
+greeter_login
+probe welcome-close 'u noctalia msg panel-close pyre/welcome:welcome' >/dev/null
+expect status-before "$as_user"' pyre dev --status | tr -s " "' 'Git identity not set'
+
+# PATH: the session's, and a login shell's.
+expect path-session 'tr "\0" "\n" < /proc/$(pgrep -u '"$user"' -x niri | head -n 1)/environ | grep "^PATH="' "^PATH=$home/\\.local/bin:"
+expect path-login "$as_user"' bash -lc "echo \$PATH"' "^$home/\\.local/bin:"
+
+# The welcome panel offers it.
+expect welcome-open 'u pyre welcome && echo opened' '^opened$'
+sleep 3
+shot dev-welcome
+click 875 554   # "Set up for development", third in "Keep the place in order"
+expect welcome-terminal 'for _ in $(seq 20); do u niri msg windows | grep -q "App ID: \"foot\"" && break; sleep 1; done; u niri msg windows | grep -c "App ID: \"foot\""' '^1$'
+expect welcome-closed 'u noctalia msg status | tr -d "[:space:]" | grep -c "\"panelOpen\":false"' '^1$'
+sleep 2
+shot dev-welcome-terminal
+# Enter at each question skips it (the name, the email, the tools), and the
+# last one closes the window.
+for _ in 1 2 3 4; do send_keys ret; sleep 1; done
+expect welcome-terminal-closed 'for _ in $(seq 20); do u niri msg windows | grep -q "App ID: \"foot\"" || break; sleep 1; done; u niri msg windows | grep -c "App ID: \"foot\""; true' '^0$'
+expect welcome-skipped "$as_user"' pyre dev --status | tr -s " "' 'Git identity not set'
+
+# The guide's words: "git" in the ordinary search finds the setup first
+# ("development" finds the editor and the dev bundle before it). A name and an
+# email typed in the floating terminal.
+launcher "git"
+shot dev-menu-row
+send_keys ret
+menu_window dev-terminal
+sleep 2
+type_keys "Ada Lovelace"$'\n'
+sleep 1
+type_keys "ada@example.org"$'\n'
+sleep 2
+shot dev-asked
+type_keys n$'\n'          # the development tools: not here, they are a large download
+sleep 2
+shot dev-done
+send_keys ret             # "Press Enter to close."
+menu_window_gone dev-terminal-closed
+expect identity 'echo "$(stat -c %U '"$gitconfig"')|$(git config --file '"$gitconfig"' user.name)|$(git config --file '"$gitconfig"' user.email)|$(git config --file '"$gitconfig"' credential.helper)"' "^$user\\|Ada Lovelace\\|ada@example\\.org\\|/usr/lib/git-core/git-credential-libsecret\$"
+expect status-after "$as_user"' pyre dev --status | tr -s " "' 'Git identity Ada Lovelace <ada@example\.org>'
+# The store works: git keeps a secret in the keyring the login unlocked, and
+# reads it back.
+expect keyring-store 'printf "protocol=https\nhost=pyre.example\nusername=ada\npassword=s3cret-token\n\n" | '"$as_user"' git credential approve; printf "protocol=https\nhost=pyre.example\nusername=ada\n\n" | '"$as_user"' git credential fill | grep "^password="' '^password=s3cret-token$'
+# A second run asks nothing about the identity and changes nothing.
+expect second-run 'before=$(sha256sum < '"$gitconfig"'); '"$as_user"' pyre dev < /dev/null > /tmp/dev-second.log 2>&1; [ "$before" = "$(sha256sum < '"$gitconfig"')" ] && grep -c "Your name" /tmp/dev-second.log' '^0$'
+
+if (( offline )); then
+  pass "skipped: the installs from the network (--offline)"
+else
+  # --- 3. a coding agent from Arch, from the menu ----------------------------------
+  expect install-lists 'pacman -Sy >/dev/null 2>&1; pacman -Si openai-codex >/dev/null && echo ready' '^ready$'
+  expect codex-row 'u pyre menu --list | grep -c "^Install .* Codex"' '^1$'
+  expect codex-install 'yes | SNAP_PAC_SKIP=y pyre menu --run install openai-codex >/dev/null 2>&1; pacman -Qq openai-codex' '^openai-codex$'
+  expect codex-runs "$as_user"' codex --version' '[0-9]+\.[0-9]+'
+  expect codex-remove-row 'u pyre menu --list | grep -c "^Remove .* Codex"' '^1$'
+
+  # --- 4. the vendor row: Claude Code, by Anthropic's installer, as the user -------
+  if [[ "$(probe vendor-reachable 'curl -fsS -o /dev/null -m 20 https://claude.ai/install.sh && echo reachable')" == *reachable* ]]; then
+    launcher "/pyre Claude"
+    shot dev-vendor-row
+    send_keys ret
+    menu_window vendor-terminal
+    sleep 2
+    shot dev-vendor-asked
+    type_keys y$'\n'
+    expect vendor-installed 'for _ in $(seq 300); do [ -x '"$home"'/.local/bin/claude ] && ! pgrep -u '"$user"' -f "^bash /tmp/tmp\." >/dev/null && break; sleep 1; done; sleep 3; stat -c %U '"$home"'/.local/bin/claude' "^$user\$"
+    shot dev-vendor-done
+    send_keys ret
+    menu_window_gone vendor-terminal-closed
+    # In the home only: nothing of it under /usr.
+    expect vendor-in-home 'ls -d '"$home"'/.local/share/claude/versions >/dev/null && ls /usr/bin/claude /usr/local/bin/claude 2>/dev/null | wc -l' '^0$'
+    expect vendor-runs "$as_user"' bash -lc "command -v claude && claude --version"' 'Claude Code'
+    expect vendor-remove-row "$as_user"' pyre menu --list | grep -c "^Remove .* Claude Code"' '^1$'
+    expect vendor-removed 'mkdir -p '"$home"'/.claude && chown '"$user"': '"$home"'/.claude; echo y | '"$as_user"' pyre menu --run vendor-remove claude >/dev/null 2>&1; ls -d '"$home"'/.local/bin/claude '"$home"'/.local/share/claude 2>/dev/null | wc -l; ls -d '"$home"'/.claude' "^$home/\\.claude\$"
+    expect vendor-install-row-back "$as_user"' pyre menu --list | grep -c "^Install .* Claude Code"' '^1$'
+  else
+    pass "skipped: the vendor row (the guest cannot reach claude.ai)"
+  fi
+
+  # --- 5. Docker: installed, and started when asked --------------------------------
+  expect menu-docker 'yes | SNAP_PAC_SKIP=y pyre menu --run install "docker docker-compose docker-buildx" > /tmp/dev-docker.log 2>&1; pacman -Qq docker' '^docker$'
+  expect docker-offered 'grep -c -e "does not run yet" -e "can act as root" /tmp/dev-docker.log' '^2$'
+  expect docker-started 'systemctl is-enabled docker.socket; systemctl is-active docker.socket' '^active$'
+fi
+
+probe evidence 'cp /var/log/test-dev-install.log /tmp/dev-*.log /mnt/share/ 2>/dev/null; true' >/dev/null
+power_off
+printf '%s: PASS (screenshots in %s)\n' "$tool" "$vm_dir/share"

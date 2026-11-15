@@ -9,3 +9,4 @@ The user guide: what a PyreOS user needs day to day. PyreOS installs these pages
 5. [Software](05-software.md)
 6. [Your machine](06-your-machine.md): screens, night light, sleep, Windows on another disk
 7. [Troubleshooting](07-troubleshooting.md)
+8. [Development](08-development.md): git, the development tools, editors and coding agents

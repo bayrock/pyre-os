@@ -82,6 +82,18 @@ sudo pacman -S <package>
 
 The bundles are `dev`, `media` and `office`. Everything else is a normal Arch package. PyreOS installs no AUR helper: if the user wants an AUR package, say that it comes from the AUR and let them decide; do not install `paru` or `yay` unasked.
 
+The PyreOS menu's Install rows cover the usual extras, coding agents among them: Codex, opencode and Gemini CLI are Arch packages (`openai-codex`, `opencode`, `gemini-cli`). Claude Code is not in Arch's repositories. Its menu row runs Anthropic's own installer as the user, into `~/.local/bin` and `~/.local/share/claude`; pacman does not manage it, and it updates itself. `~/.local/bin` is on `PATH`.
+
+## Development
+
+```
+pyre dev --status         # git identity, credential store, dev tools, GitHub, Rust
+pyre dev                  # asks about each part that is missing; run it in a terminal
+pyre dev git --name "Ada Lovelace" --email ada@example.org
+```
+
+git's settings are the user's own (`~/.config/git/config`); change them with `git config --global`, and never set a name or email the user did not give. Passwords and tokens that git asks for rest in the keyring (`credential.helper` is git's libsecret helper), which the login unlocks. `/usr/share/doc/pyre/guide/08-development.md` is the user's page about all this.
+
 ## Hardware
 
 ```

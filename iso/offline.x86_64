@@ -24,6 +24,8 @@ espeakup
 # PyreOS base system and desktop
 pyre-base
 pyre-desktop
+# The development tools, which pyre-install offers (ADR 0022)
+pyre-bundle-dev
 # Preferred providers, named so pacman never picks another (lib/archinstall.sh)
 pipewire-jack
 noto-fonts

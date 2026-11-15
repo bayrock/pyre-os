@@ -93,7 +93,7 @@ EOF
   [ -z "$(printf '%s\n' "${lines[@]}" | cut -f1 | sort | uniq -d)" ]
   # Every row of menu.tsv has four fields and a verb pyre menu knows.
   run awk -F'\t' '/^#/ || /^$/ { next }
-    NF != 4 || $3 !~ /^(term|launcher|search|aur|install-list|remove-list|theme-list|panel|nightlight|settings|edit|guide|welcome|url|session|hibernate)$/ { print "bad row: " $0; bad = 1 }
+    NF != 4 || $3 !~ /^(term|launcher|search|aur|install-list|remove-list|theme-list|vendor|panel|nightlight|settings|edit|guide|welcome|url|session|hibernate)$/ { print "bad row: " $0; bad = 1 }
     END { exit bad }' "$repo/src/cli/menu/menu.tsv"
   echo "$output"
   [ "$status" -eq 0 ]
@@ -174,6 +174,91 @@ EOF
   run pyre menu --run term "update; reboot" </dev/null
   [ "$status" -ne 0 ]
   [ ! -s "$LOG" ]
+}
+
+@test "menu: Docker offers to start once it is installed, and says what the group means" {
+  run pyre menu --run install "docker docker-compose docker-buildx" <<<"y"
+  [ "$status" -eq 0 ]
+  grep -qx 'systemctl enable --now docker.socket' "$LOG"
+  [[ "$output" == *"usermod -aG docker"* && "$output" == *"can act as root"* ]]
+  : >"$LOG"
+  run pyre menu --run install "docker docker-compose docker-buildx" <<<"n"
+  [ "$status" -eq 0 ]
+  ! grep -q '^systemctl' "$LOG"
+  run pyre menu --run install imv </dev/null
+  [[ "$output" != *Docker* ]]
+}
+
+# A curl that "downloads" an installer: one that puts a claude command in the
+# home, as the real one does.
+fake_installer() {
+  cat >"$bin/curl" <<'EOF'
+#!/bin/sh
+echo "curl $*" >> "$LOG"
+[ -z "$CURL_FAILS" ] || exit 22
+while [ "$1" != -o ]; do shift; done
+printf 'echo "installer ran as $(id -un)" >> "$LOG"\nmkdir -p "$HOME/.local/bin" "$HOME/.local/share/claude/versions"\n: > "$HOME/.local/bin/claude"\n' > "$2"
+EOF
+  chmod +x "$bin/curl"
+}
+
+@test "menu: the vendor row installs Claude Code only after a yes, by the published installer" {
+  fake_installer
+  run pyre menu --list
+  [[ "$output" == *$'Install › Claude Code\t'*"(proprietary)"* && "$output" != *"Remove › Claude Code"* ]]
+  pyre menu --pick "Install › Claude Code"
+  sleep 0.3
+  grep -q '^foot --app-id=pyre.menu .* menu --run vendor claude$' "$LOG"
+  : >"$LOG"
+  run pyre menu --run vendor claude <<<"n"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"proprietary software from Anthropic"* && "$output" == *"https://claude.ai/install.sh"* ]]
+  [ ! -s "$LOG" ]
+  run pyre menu --run vendor claude <<<"y"
+  [ "$status" -eq 0 ]
+  grep -q '^curl -fsSL -o .* -- https://claude.ai/install.sh$' "$LOG"
+  grep -qx "installer ran as $(id -un)" "$LOG"
+  ! grep -q -e '^pacman' -e sudo "$LOG"
+  [ -e "$HOME/.local/bin/claude" ]
+}
+
+@test "menu: an installed Claude Code is a Remove row, and removal keeps the settings" {
+  mkdir -p "$HOME/.local/bin" "$HOME/.local/share/claude/versions" "$HOME/.claude"
+  : >"$HOME/.local/bin/claude"
+  run pyre menu --list
+  [[ "$output" == *$'Remove › Claude Code\t'* && "$output" != *"Install › Claude Code"* ]]
+  pyre menu --pick "Remove › Claude Code"
+  sleep 0.3
+  grep -q '^foot --app-id=pyre.menu .* menu --run vendor-remove claude$' "$LOG"
+  run pyre menu --run vendor-remove claude <<<"y"
+  [ "$status" -eq 0 ]
+  [ ! -e "$HOME/.local/bin/claude" ] && [ ! -e "$HOME/.local/share/claude" ]
+  [ -d "$HOME/.claude" ]
+}
+
+@test "menu: a failed download runs nothing, offline says so, and no other vendor exists" {
+  fake_installer
+  CURL_FAILS=1 run pyre menu --run vendor claude <<<"y"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not be fetched"* ]]
+  ! grep -q '^installer ran' "$LOG"
+  : >"$LOG"
+  CONNECTIVITY=none run pyre menu --run vendor claude <<<"y"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"This machine is offline"* ]]
+  [ ! -s "$LOG" ]
+  for name in "" other "claude; touch pwned" "https://example.org/x.sh"; do
+    run pyre menu --run vendor "$name" <<<"y"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"no vendor installer named"* ]]
+  done
+  [ ! -s "$LOG" ] && [ ! -e pwned ]
+}
+
+@test "menu: Setup › Development runs pyre dev in the terminal" {
+  pyre menu --pick "Setup › Development"
+  sleep 0.3
+  grep -q '^foot --app-id=pyre.menu .* menu --run term dev$' "$LOG"
 }
 
 @test "menu --run: offline, an install says so and pacman is not called" {

@@ -13,6 +13,9 @@
 #   kernel_params = ""         # extra kernel parameters, e.g. a serial console
 #   autologin = false          # log the user in after the disk is unlocked
 #   hibernation = false        # a swapfile as large as the memory, and resume
+#   dev_tools = false          # the development tools (pyre-bundle-dev)
+#   git_name = ""              # the user's name for git commits; default: not set
+#   git_email = ""             # and their email
 #   pyre_repo = ""             # [pyre] server URL; default: pyre-release's mirrorlist
 #   finish = "none"            # none | reboot | poweroff
 #
@@ -20,7 +23,7 @@
 # else is rejected rather than guessed.
 
 declare -gA CFG=()
-readonly CONFIG_KEYS=" disk erase_disk username password luks_passphrase hostname timezone locale keymap kernel_params autologin hibernation pyre_repo finish "
+readonly CONFIG_KEYS=" disk erase_disk username password luks_passphrase hostname timezone locale keymap kernel_params autologin hibernation dev_tools git_name git_email pyre_repo finish "
 
 config_defaults() {
   CFG=(
@@ -32,6 +35,9 @@ config_defaults() {
     [kernel_params]=""
     [autologin]=false
     [hibernation]=false
+    [dev_tools]=false
+    [git_name]=""
+    [git_email]=""
     [pyre_repo]=""
     [finish]=none
   )
@@ -60,6 +66,16 @@ config_load() {
   done <"$file"
 }
 
+# valid_git_name NAME, valid_git_email EMAIL: what pyre dev git accepts
+# (ADR 0022). Empty is valid: the identity is optional.
+valid_git_name() {
+  [[ ${#1} -le 100 && "$1" != *[[:cntrl:]\<\>]* ]]
+}
+
+valid_git_email() {
+  [[ -z "$1" ]] || [[ ${#1} -le 254 && "$1" =~ ^[^[:space:][:cntrl:]@\<\>]+@[^[:space:][:cntrl:]@\<\>]+$ ]]
+}
+
 # config_check: validate values that need no system lookups. Prints every
 # problem and returns 1 if there was any.
 config_check() {
@@ -78,7 +94,9 @@ config_check() {
     errors+=("locale must be a UTF-8 locale such as en_US.UTF-8")
   [[ "${CFG[keymap]}" =~ ^[A-Za-z0-9_.-]+$ ]] || errors+=("keymap is malformed")
   [[ "${CFG[kernel_params]}" =~ ^[A-Za-z0-9_.,:=/+\ -]*$ ]] || errors+=("kernel_params has unsupported characters")
-  for key in erase_disk autologin hibernation; do
+  valid_git_name "${CFG[git_name]}" || errors+=("git_name must be at most 100 characters, without < or >")
+  valid_git_email "${CFG[git_email]}" || errors+=("git_email must look like name@example.org")
+  for key in erase_disk autologin hibernation dev_tools; do
     [[ "${CFG[$key]}" == true || "${CFG[$key]}" == false ]] || errors+=("$key must be true or false")
   done
   local re_url='^(https?|file)://[^[:space:]"'"'"'\\]+$'

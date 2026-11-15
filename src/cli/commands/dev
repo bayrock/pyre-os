@@ -1,0 +1,166 @@
+# shellcheck shell=bash
+# help: set up for development: git identity, the dev tools, GitHub, Rust
+# usage: pyre dev   |   pyre dev --status   |   pyre dev git [--name NAME] [--email EMAIL]
+#   (no option)   ask about each part that is not set up yet; Enter skips one
+#   --status      show what is set up, and change nothing
+#   git           write the git identity without asking (pyre-install does this)
+# ADR 0022. Everything here is the user's own: the git settings go into
+# ~/.config/git/config (or ~/.gitconfig when that exists), and a second run
+# changes nothing. Passwords and tokens that git asks for are kept in the
+# keyring, which the login unlocks.
+
+readonly DEV_BUNDLE=pyre-bundle-dev
+readonly DEV_HELPER=/usr/lib/git-core/git-credential-libsecret
+
+dev_git_get() {
+  git config --global --get "$1" 2>/dev/null || true
+}
+
+# dev_check_name NAME, dev_check_email EMAIL: die unless the value can go
+# into a commit's author line.
+dev_check_name() {
+  [[ -n "$1" && ${#1} -le 100 && "$1" != *[[:cntrl:]\<\>]* ]] ||
+    die "dev: a name is 1 to 100 characters, without < or >"
+}
+
+dev_check_email() {
+  [[ ${#1} -le 254 && "$1" =~ ^[^[:space:][:cntrl:]@\<\>]+@[^[:space:][:cntrl:]@\<\>]+$ ]] ||
+    die "dev: an email looks like name@example.org"
+}
+
+# dev_git_set NAME EMAIL: write what is not empty, and name the keyring as
+# the credential store unless a store is already chosen.
+dev_git_set() {
+  local name="$1" email="$2" file="${XDG_CONFIG_HOME:-$HOME/.config}/git/config"
+  command -v git >/dev/null 2>&1 || die "dev: git is not installed"
+  [[ -z "$name" ]] || dev_check_name "$name"
+  [[ -z "$email" ]] || dev_check_email "$email"
+  # git writes to the XDG file only when it exists and ~/.gitconfig does not.
+  if [[ ! -e "$HOME/.gitconfig" && ! -e "$file" ]]; then
+    mkdir -p -- "${file%/*}"
+    : >"$file"
+  fi
+  [[ -z "$name" ]] || git config --global user.name "$name"
+  [[ -z "$email" ]] || git config --global user.email "$email"
+  if [[ -x "$PYRE_ROOT$DEV_HELPER" && -z "$(git config --get-all credential.helper 2>/dev/null)" ]]; then
+    git config --global credential.helper "$DEV_HELPER"
+  fi
+}
+
+dev_has_bundle() {
+  pacman -Qq "$DEV_BUNDLE" >/dev/null 2>&1
+}
+
+# dev_rust_missing: true when rustup is installed without any toolchain.
+dev_rust_missing() {
+  command -v rustup >/dev/null 2>&1 || return 1
+  ! rustup toolchain list 2>/dev/null | grep -qv '^no installed toolchains'
+}
+
+dev_status() {
+  local name email helper
+  name="$(dev_git_get user.name)"
+  email="$(dev_git_get user.email)"
+  helper="$(git config --get-all credential.helper 2>/dev/null | tail -n 1)" || true
+  if [[ -n "$name" || -n "$email" ]]; then
+    printf '  %-13s %s <%s>\n' "Git identity" "${name:-no name}" "${email:-no email}"
+  else
+    printf '  %-13s not set\n' "Git identity"
+  fi
+  case "$helper" in
+    "") printf '  %-13s not kept: git asks every time\n' "Credentials" ;;
+    "$DEV_HELPER") printf '  %-13s kept in the keyring\n' "Credentials" ;;
+    *) printf '  %-13s %s\n' "Credentials" "$helper" ;;
+  esac
+  if dev_has_bundle; then
+    printf '  %-13s installed\n' "Dev tools"
+  else
+    printf '  %-13s not installed (pyre install dev)\n' "Dev tools"
+  fi
+  if ! command -v gh >/dev/null 2>&1; then
+    printf '  %-13s the GitHub CLI is not installed\n' "GitHub"
+  elif gh auth status >/dev/null 2>&1; then
+    printf '  %-13s signed in\n' "GitHub"
+  else
+    printf '  %-13s not signed in (gh auth login)\n' "GitHub"
+  fi
+  if dev_rust_missing; then
+    printf '  %-13s no toolchain (rustup default stable)\n' "Rust"
+  elif command -v rustup >/dev/null 2>&1; then
+    printf '  %-13s %s\n' "Rust" "$(rustup toolchain list 2>/dev/null | head -n 1)"
+  fi
+}
+
+# dev_ask PROMPT: one line from the user; empty when they skip or stdin ends.
+dev_ask() {
+  local answer=""
+  read -r -p "$1 (Enter skips): " answer || true
+  printf '%s\n' "$answer"
+}
+
+dev_setup() {
+  local name email
+  step "Git identity"
+  name="$(dev_git_get user.name)"
+  email="$(dev_git_get user.email)"
+  if [[ -n "$name" && -n "$email" ]]; then
+    info "$name <$email>"
+    name="" email=""
+  else
+    printf 'Git signs every commit with a name and an email.\n'
+    if [[ -n "$name" ]]; then info "name: $name"; name=""; else name="$(dev_ask "Your name")"; fi
+    if [[ -n "$email" ]]; then info "email: $email"; email=""; else email="$(dev_ask "Your email")"; fi
+  fi
+  # Also when nothing was typed: it names the keyring as the credential store.
+  dev_git_set "$name" "$email"
+
+  step "Development tools"
+  if dev_has_bundle; then
+    info "installed"
+  elif confirm "Install them? Compilers, GitHub CLI, lazygit, Go, Node, Python and Rust."; then
+    as_root pacman -S --needed -- "$DEV_BUNDLE" ||
+      warn "that did not finish; it needs a network, and pyre update first if the package lists are old"
+  fi
+
+  if command -v gh >/dev/null 2>&1; then
+    step "GitHub"
+    if gh auth status >/dev/null 2>&1; then
+      info "signed in"
+    elif confirm "Sign in to GitHub now? It opens the browser."; then
+      gh auth login || warn "the sign-in did not finish; gh auth login tries again"
+    fi
+  fi
+
+  if dev_rust_missing; then
+    step "Rust"
+    if confirm "Install the stable Rust toolchain into your home? It is a download of about 100 MB."; then
+      rustup default stable || warn "rustup did not finish; rustup default stable tries again"
+    fi
+  fi
+
+  step "Set up"
+  dev_status
+  printf '\nEditors and coding agents are in the launcher: Super + Space, then type "install".\n'
+}
+
+cmd_dev() {
+  local name="" email=""
+  case "${1:-}" in
+    "") dev_setup ;;
+    --status) dev_status ;;
+    git)
+      shift
+      while (( $# )); do
+        case "$1" in
+          --name) name="${2:?dev git: --name needs a value}"; shift 2 ;;
+          --email) email="${2:?dev git: --email needs a value}"; shift 2 ;;
+          *) die "dev git: unknown option $1 (pyre help dev)" ;;
+        esac
+      done
+      [[ -n "$name" || -n "$email" ]] || die "dev git: give --name, --email, or both"
+      dev_git_set "$name" "$email"
+      ;;
+    -h | --help) command_usage "${BASH_SOURCE[0]}" ;;
+    *) die "dev: unknown option $1 (pyre help dev)" ;;
+  esac
+}

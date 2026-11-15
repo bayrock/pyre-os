@@ -13,9 +13,11 @@
 #               wake, and the lock that suspend sets; a prompt power-off
 #   hibernate   hibernate, power off, and resume into the same session
 #   chainload   boot the Windows entry from the Limine menu
-# Usage: tools/test-machine [--from STAGE] [--local-packages] [ISO]
+# Usage: tools/test-machine [--from STAGE] [--local-packages] [--no-dev-tools] [ISO]
 #   --local-packages   use the newest PyreOS packages in build/repo instead of
 #                      the ISO's own (before an ISO rebuild)
+#   --no-dev-tools     answer no to the development tools, for an ISO built
+#                      before its offline repository carried them (ADR 0022)
 # The default ISO is the newest build/out/pyreos-*.iso. --from resumes on the
 # disks a previous run left in build/vm/test-machine/ (development only).
 # Evidence: build/vm/test-machine/serial-<stage>.log and share/*.png
@@ -31,14 +33,20 @@ source "$repo_root/tools/lib/vmtest.sh"
 hostname=pyre-machine
 timezone=Europe/Lisbon
 windows="$vm_dir/windows.img"
+# The git identity typed into the installer, and whether to take its
+# development tools (ADR 0022).
+git_name="Pyre Tester"
+git_email=tester@example.org
+dev_tools=1
 
 from=install
 iso=""
 while (( $# )); do
   case "$1" in
-    -h|--help) sed -n '3,21s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '3,23s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; exit 0 ;;
     --from) from="${2:?--from needs a stage}"; shift 2 ;;
     --local-packages) local_packages=1; shift ;;
+    --no-dev-tools) dev_tools=0; shift ;;
     -*) echo "$tool: unknown option: $1" >&2; exit 2 ;;
     *) iso="$1"; shift ;;
   esac
@@ -173,6 +181,13 @@ stage_install() {
   type_keys y
   prompt hibernation
   type_keys y
+  prompt git-name
+  type_keys "$git_name"$'\n'
+  prompt git-email
+  type_keys "$git_email"$'\n'
+  prompt dev-tools
+  if (( dev_tools )); then type_keys y; else type_keys n; fi
+  printf '%s\n' "$dev_tools" >"$vm_dir/dev-tools"
   prompt confirm       # the summary names the disk and every answer
   type_keys 'erase'$'\n'
   wait_for '^E2E-INSTALL-EXIT=' 1800 || die "pyre-install did not finish"
@@ -195,6 +210,15 @@ stage_first_boot() {
   expect tui-locale 'grep ^LANG= /etc/locale.conf' '^LANG=en_US.UTF-8$'
   expect tui-keymap 'grep ^KEYMAP= /etc/vconsole.conf' '^KEYMAP=us$'
   expect tui-kernel-params 'cat /proc/cmdline' 'console=ttyS0,115200 console=tty0'
+  # The development answers (ADR 0022): the identity in the user's own git
+  # config, and the tools from the offline repository when they were taken.
+  expect tui-git-identity 'f=/home/'"$user"'/.config/git/config; echo "$(stat -c %U "$f")|$(git config --file "$f" user.name)|$(git config --file "$f" user.email)|$(git config --file "$f" credential.helper)"' '^'"$user"'\|'"$git_name"'\|'"$git_email"'\|/usr/lib/git-core/git-credential-libsecret$'
+  if [[ "$(<"$vm_dir/dev-tools")" == 1 ]]; then
+    expect tui-dev-tools 'pacman -Qq pyre-bundle-dev base-devel github-cli go nodejs uv rustup | wc -l' '^7$'
+    expect tui-dev-status 'runuser -u '"$user"' -- env HOME=/home/'"$user"' pyre dev --status | tr -s " "' 'Dev tools installed'
+  else
+    expect tui-no-dev-tools 'pacman -Qq pyre-bundle-dev 2>/dev/null | wc -l' '^0$'
+  fi
   expect autologin-config 'grep -A2 "^\[initial_session\]" /etc/greetd/config.toml | tr "\n" " "; echo' "command = \"niri-session\" user = \"$user\""
   # Autologin: the session is up without anyone typing at the login screen.
   expect autologin-session 'for _ in $(seq 60); do pgrep -u '"$user"' -x niri >/dev/null && pgrep -u '"$user"' -x noctalia >/dev/null && break; sleep 1; done; pgrep -u '"$user"' -x niri >/dev/null && pgrep -u '"$user"' -x noctalia >/dev/null && echo up' '^up$'

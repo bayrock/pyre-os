@@ -20,6 +20,18 @@ ask_secret() {
   printf '%s\n' "$first"
 }
 
+# ask_checked PROMPT CHECK: an optional value, asked again until CHECK
+# accepts it. Enter leaves it empty.
+ask_checked() {
+  local value
+  while :; do
+    value="$(ask "$1")"
+    "$2" "$value" && break
+    gum style --foreground 1 "That does not look right. Try again, or leave it empty."
+  done
+  printf '%s\n' "$value"
+}
+
 # disk_contents DISK: what the disk holds now ("empty", or its filesystems),
 # so that nobody erases the wrong one on a machine with several disks.
 disk_contents() {
@@ -68,6 +80,12 @@ tui_collect() {
   if gum confirm --default=false "Enable hibernation? It adds a $swap_gib GiB swapfile, the size of this machine's memory."; then
     CFG[hibernation]=true
   fi
+  # Development (ADR 0022): both the identity and the tools are optional.
+  CFG[git_name]="$(ask_checked "Your name, for git commits (optional)" valid_git_name)"
+  CFG[git_email]="$(ask_checked "Your email, for git commits (optional)" valid_git_email)"
+  if gum confirm --default=false "Install the development tools? Compilers, GitHub CLI, Go, Node, Python and Rust."; then
+    CFG[dev_tools]=true
+  fi
 }
 
 # The destructive-action confirmation names the exact disk (ADR 0006).
@@ -77,7 +95,8 @@ tui_confirm() {
   gum style --border rounded --padding "0 1" --foreground 1 \
     "This erases ALL data on ${CFG[disk]} (${desc}, $(disk_contents "${CFG[disk]}"))." \
     "Hostname ${CFG[hostname]}, user ${CFG[username]}, ${CFG[timezone]}, ${CFG[locale]}, keymap ${CFG[keymap]}," \
-    "autologin ${CFG[autologin]}, hibernation ${CFG[hibernation]}."
+    "autologin ${CFG[autologin]}, hibernation ${CFG[hibernation]}, development tools ${CFG[dev_tools]}," \
+    "git identity ${CFG[git_name]:-no name} <${CFG[git_email]:-no email}>."
   [[ "$(gum input --prompt 'Type erase to continue: ')" == erase ]] || die "not confirmed; nothing was changed"
   CFG[erase_disk]=true
 }

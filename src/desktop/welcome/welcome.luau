@@ -196,6 +196,10 @@ local function tidyCard()
     action("update", "refresh", "Check for updates", function()
       noctalia.runInTerminal("pyre update; echo; read -rp 'Press Enter to close. '")
     end),
+    action("dev", "code", "Set up for development", function()
+      panel.close()
+      noctalia.runInTerminal("pyre dev; echo; read -rp 'Press Enter to close. '")
+    end),
     action("settings", "adjustments", "Shell settings", function()
       panel.close()
       noctalia.openSettings()

@@ -1,10 +1,10 @@
 # Status
 
-Last updated: 2026-11-14
+Last updated: 2026-11-15
 
 ## Current phase
 
-**P6, daily driver on the development machine (active).** Everything about the machine that needs no real hardware is built and passes in VMs, on the ISO itself. Before the owner's backups and install (`docs/reference/migration.md`) comes the development setup of ADR 0022, which changes the installer and so needs one more ISO.
+**P6, daily driver on the development machine (active).** Everything about the machine that needs no real hardware is built and passes in VMs. The ISO is one rebuild behind the packages: the development setup (ADR 0022) changed the installer and put the dev bundle on the image. So the order is: rebuild the ISO, run the ISO tests, then the owner's backups and install (`docs/reference/migration.md`).
 
 | Step | State | Evidence |
 |---|---|---|
@@ -17,11 +17,12 @@ Last updated: 2026-11-14
 | Autologin keyring (ADR 0018) | Done in the VM | no dialog, `secret-tool` round trip, power-off in seconds |
 | NVIDIA install path | Done in the VM, without the GPU | `tools/test-nvidia`: the rule's packages from the offline repository, DKMS for both kernels in the installer's chroot, the modules in both initramfs images, a normal boot |
 | `pyre hw` on the real GPU | Detection only | read-only on the machine: the RTX 3060 Ti matches `10-nvidia-open` |
-| An ISO with the current packages | Done: `pyreos-2026.11.14-x86_64.iso` (sha256 `633ccb91…dfacba29`, 3.7 GB) carries `pyre-cli` 0.5.0 and `pyre-desktop` 0.5.0 and passed the four ISO tests | "P6 runs" below |
+| An ISO with the current packages | **Behind: rebuild before the install.** `pyreos-2026.11.14-x86_64.iso` (sha256 `633ccb91…dfacba29`, 3.7 GB) passed the four ISO tests with `pyre-cli` 0.5.0 and `pyre-desktop` 0.5.0, but has the installer without the development questions and no dev bundle in its offline repository | `tools/build-pkgs && sudo tools/build-iso` (the owner), then the four tests and `tools/test-dev` |
 | Agent skill (ADR 0019) | Done in the VM | `tools/test-e2e`, first boot: `pyre` linked into `~/.claude/skills` and `~/.agents/skills` at the first login |
 | Night light | Done in the VM, without the tint | `tools/test-e2e`, desktop: off by default, the 20:00 to 07:00 schedule, `Mod+Ctrl+N` and the schedule in Noctalia's log. QEMU's display has no gamma table, so the tint waits for the machine |
 | Keymap, key list and PyreOS menu (ADR 0021) | Done in the VM | `tools/test-e2e`, desktop: the config validates; `Mod+K` lists 125 keys and `Mod+Alt+Space` the menu, in the launcher; a row chosen there and one found by the ordinary search both act; `Mod+Escape`, `Mod+Ctrl+L`, `Mod+W`, `Mod+Shift+2` and `Mod+Tab`; no recorder by default and a notice that says where it is, then the recorder installed through the menu's own code path and a recording made |
 | Remind me (ADR 0020) | Done in the VM | `tools/test-remind`: `/remind 3h …` and plain "remind me …" in the launcher, `pyre remind` in a terminal, a reminder that fires and stays, one cancelled from the launcher, and one that came due while the machine was off, shown at the next login |
+| Development setup (ADR 0022) | Done in the VM, except the tools at install | `tools/test-e2e`: a git identity from the installer's config, in the user's `~/.config/git/config` with the keyring as the store; `~/.local/bin` on the session's `PATH`. `tools/test-machine`: the name, the email and the tools question typed into the installer. `tools/test-dev`: "Set up for development" in the welcome panel and `git` in the launcher both open `pyre dev`; a name and email typed there; a secret stored and read back through the keyring; Codex installed from the menu; Claude Code 2.1.325 installed by the vendor row as the user, run, and removed with its settings kept; Docker's socket enabled on a yes. The yes to the tools needs the dev bundle on the ISO, so it runs after the rebuild |
 | The author's overlay | Scaffolded, untested on the machine | a local repository outside this one (`../pyre-overlay`): outputs, keys, foot, mpv, package lists |
 | Real hardware: driver under niri, 240 Hz and VRR, sleep, Bluetooth, audio, peripherals | Waits for the install | `tools/hw-report` collects it in one run |
 | Migration, then a week of daily use | Waits for the owner | the exit criterion |
@@ -36,6 +37,8 @@ Last updated: 2026-11-14
 - **With `--local-packages` before the rebuild**, on overlays of an e2e install with the same packages: `tools/test-remind` passed 45 checks, `tools/test-theme` 83 and `tools/test-visual` 38, with the welcome panel, its guide and every theme captured.
 - **CI** is green on `main` (check, packages and publish), and the testing channel carries `pyre-cli` 0.5.0 and `pyre-desktop` 0.5.0 since 2026-11-15.
 - **`tools/check`:** passes, with new bats tests for the swapfile and resume arguments, ESP detection, the autologin keyring, the resume-offset check, `HW_SYS`, and the boot-branding hook before Limine exists.
+
+- **After that ISO** (2026-11-15, `--local-packages`, with `pyre-cli` 0.6.0, `pyre-desktop` 0.6.0 and `pyre-installer` 0.5.0: the development setup): `tools/test-e2e` passed every stage from a fresh install, 130 checks. `tools/test-machine --no-dev-tools` passed all four stages, 80 checks, with the three new prompts typed. On overlays of the e2e install, `tools/test-dev` passed 49 checks, `tools/test-theme` 83 and `tools/test-visual` 38, with the welcome panel and its new action captured.
 
 **Found on the way:**
 
@@ -55,6 +58,12 @@ Last updated: 2026-11-14
 - **A `[pyre]` database newer than the channel's breaks a plain `pacman -Sy`** after the server changes: pacman keeps the newer file and fetches only the channel's signature, which does not match ("invalid or corrupted database"). It happens in tests that switch a guest from the local repository to the channel right after a local build, never on a real install. `test-visual`, `test-theme` and `test-splash` now force the refresh.
 - **`tools/test-visual` captured a bare desktop as "the welcome panel"** when its base disk had been logged into before. It now makes the login a first one and checks that the panel is open.
 - **The serial log sometimes shows a character of the guest's output twice** (its input arrived intact in 150 long commands). When it hit a probe's end marker the probe never finished. Markers now match with any character doubled (`tools/lib/vmtest.sh`).
+
+- **The launcher ranks apps above the menu's rows.** "development" finds Neovim, then the dev bundle, then "Setup › Development", whatever the row is called or where it stands in the file (the order is a fuzzy score, not the file's). "git" finds the setup first, so the guide says that.
+- **A probe's name must not begin an earlier probe's name** in the VM tests: the wait for its end marker matches the earlier, longer marker and returns at once. It cost one `tools/test-dev` run.
+- **One `tools/test-e2e` run did not reach a session** within a minute of the password at the login screen. The same disk logged in when booted by hand, and the next fresh run passed. Not reproduced; if it returns, the greeter's focus when the password is typed is the first thing to check.
+- **A `tools/test-e2e --from desktop` run is only valid on a disk nobody has logged into:** a login syncs the user's look to the greeter, and the stage checks the greeter's first-boot state.
+- **Not exercised:** a coding agent signed in and loading the `pyre` skill on PyreOS (Claude Code and Codex were only started for their version); `gh auth login`, which needs an account; the Rust toolchain download.
 
 **Carried over** (later phases unless reprioritized):
 

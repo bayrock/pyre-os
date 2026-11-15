@@ -74,6 +74,19 @@ seed_user_home() {
   info "user stubs and reconcile state for $user"
 }
 
+# The git identity the user gave, if any (ADR 0022). pyre dev git writes it
+# into the user's own ~/.config/git/config, with the keyring as the place
+# git keeps passwords and tokens.
+seed_git_identity() {
+  local user="${CFG[username]}" args=()
+  [[ -z "${CFG[git_name]}" ]] || args+=(--name "${CFG[git_name]}")
+  [[ -z "${CFG[git_email]}" ]] || args+=(--email "${CFG[git_email]}")
+  (( ${#args[@]} )) || return 0
+  in_target runuser -u "$user" -- env HOME="/home/$user" pyre dev git "${args[@]}" ||
+    die "pyre dev git failed for $user"
+  info "git identity for $user"
+}
+
 # keyring_file: a gnome-keyring keyring without a password (its plain format).
 keyring_file() {
   printf '[keyring]\ndisplay-name=Default keyring\nctime=%s\nmtime=0\nlock-on-idle=false\nlock-after=false\n' "$(date +%s)"
@@ -121,5 +134,6 @@ desktop_setup() {
   write_greetd_pam
   hw_setup
   seed_user_home
+  seed_git_identity
   seed_autologin_keyring
 }

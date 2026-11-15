@@ -6,7 +6,7 @@ PyreOS is Arch Linux, so the whole Arch repository is yours, and the AUR too. Py
 
 Open the launcher (**Super + Space**) and type `install`, or open the PyreOS menu (**Super + Alt + Space**):
 
-- **Install › …** lists optional apps picked for PyreOS: a video player, an image viewer, a document viewer, the screen recorder, editors, terminals, messengers and more. All of them come from Arch's own repositories.
+- **Install › …** lists optional apps picked for PyreOS: a video player, an image viewer, a document viewer, the screen recorder, editors, coding agents, terminals, messengers and more. All but one come from Arch's own repositories. The exception is **Claude Code**, which Anthropic's own installer puts into your home; the row says so and asks first.
 - **Install › Find a package…** searches everything in those repositories. Tab marks several, Enter installs.
 - **Remove › …** lists what you installed from the menu.
 
@@ -28,7 +28,7 @@ pyre install dev media
 pyre remove media
 ```
 
-The menu lists the bundles too, as **Install › dev bundle** and so on.
+The menu lists the bundles too, as **Install › dev bundle** and so on. The installer offers the `dev` bundle, and `pyre dev` sets up git with it; the Development page explains.
 
 ## Single apps
 

@@ -32,7 +32,8 @@ That is the whole default set, on purpose. A video player, an image and document
 - **Theme:** **Super + Ctrl + T** lists the themes; so does the welcome panel, and `pyre theme set birch` in a terminal. The Themes page explains.
 - **Shell settings:** open the launcher and type `shell settings` for Noctalia's settings: the bar, the dock, the wallpaper, night light and more.
 - **Your config files** live in `~/.config`. PyreOS loads its defaults first and your files second, so whatever you set wins, and PyreOS never rewrites your files.
-- **With a coding agent:** if you use Claude Code, Codex, Gemini CLI or opencode, it already knows its way around. PyreOS gives each of them a skill named `pyre` that explains the system, so you can ask for a keybinding, a monitor layout or a rollback in plain words. The agents themselves are not installed; that choice is yours.
+- **With a coding agent:** if you use Claude Code, Codex, Gemini CLI or opencode, it already knows its way around. PyreOS gives each of them a skill named `pyre` that explains the system, so you can ask for a keybinding, a monitor layout or a rollback in plain words. The agents themselves are not installed; that choice is yours, and they are in the launcher under `install`.
+- **For development:** `pyre dev` sets up git, the development tools and GitHub in one go. The Development page explains.
 
 ## Remind me
 

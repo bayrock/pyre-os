@@ -4,16 +4,17 @@
 # src/hw/, skills/ and system/ of this repository, so the package is built in
 # place.
 pkgname=pyre-cli
-pkgver=0.5.0
+pkgver=0.6.0
 pkgrel=1
-pkgdesc='PyreOS lifecycle tool: update, snapshot, rollback, doctor, reconcile, themes, menu, keys, welcome, reminders, hardware rules, agent skill'
+pkgdesc='PyreOS lifecycle tool: update, snapshot, rollback, doctor, reconcile, themes, menu, keys, welcome, reminders, development setup, hardware rules, agent skill'
 arch=(any)
 url='https://github.com/bayrock/pyre-os'
 license=(MIT)
 depends=(bash coreutils diffutils snapper sudo util-linux)
 optdepends=('libnotify: notifications about .pyre-new files, and reminders'
             'fzf: the package search of pyre menu'
-            'foot: the terminal pyre menu runs installs and updates in')
+            'foot: the terminal pyre menu runs installs and updates in'
+            'git: the identity and the credential store pyre dev sets up')
 
 package() {
   local root="$startdir/../.." dir

@@ -188,6 +188,7 @@ EOF
 @test "the ISO's offline package list covers everything the installer installs" {
   offline="$BATS_TEST_DIRNAME/../iso/offline.x86_64"
   config_load "$cfg"
+  CFG[dev_tools]=true
   mapfile -t listed < <(grep -Ev '^[[:space:]]*(#|$)' "$offline")
   mapfile -t needed < <(archinstall_config $((40 * 1024 * 1024 * 1024)) 512 a b | jq -r '.packages[], .kernels[]')
   needed+=("${BOOT_STACK[@]}" snap-pac base sudo linux-firmware mkinitcpio btrfs-progs networkmanager wpa_supplicant)
@@ -196,6 +197,55 @@ EOF
   for pkg in "${needed[@]}"; do
     [[ " ${listed[*]} " == *" $pkg "* ]] || { echo "missing from iso/offline.x86_64: $pkg"; return 1; }
   done
+}
+
+@test "the development tools are off by default, and one package when asked for" {
+  config_load "$cfg"
+  [ "${CFG[dev_tools]}" = false ]
+  run archinstall_config $((40 * 1024 * 1024 * 1024)) 512 a b
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.packages | index("pyre-bundle-dev")' <<<"$output")" = null ]
+  echo 'dev_tools = true' >>"$cfg"
+  config_load "$cfg"
+  config_check
+  run archinstall_config $((40 * 1024 * 1024 * 1024)) 512 a b
+  [ "$(jq -r '.packages | map(select(. == "pyre-bundle-dev")) | length' <<<"$output")" = 1 ]
+  [ "$(jq -r '.packages | index("pyre-desktop")' <<<"$output")" = 0 ]
+  CFG[dev_tools]=yes
+  run config_check
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"dev_tools must be true or false"* ]]
+}
+
+@test "the git identity is optional, and checked when given" {
+  config_load "$cfg"
+  [ -z "${CFG[git_name]}${CFG[git_email]}" ]
+  config_check
+  printf '%s\n' "git_name = \"Ada O'Brien\"" 'git_email = "ada@example.org"' >>"$cfg"
+  config_load "$cfg"
+  config_check
+  [ "${CFG[git_name]}" = "Ada O'Brien" ]
+  CFG[git_email]="ada at example"
+  CFG[git_name]="Ada <ada>"
+  run config_check
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"git_name must be"* && "$output" == *"git_email must look like"* ]]
+}
+
+@test "the installer writes a git identity only when one was given" {
+  calls="$BATS_TEST_TMPDIR/calls"
+  in_target() { printf '%s|' "$@" >>"$calls"; echo >>"$calls"; }
+  config_load "$cfg"
+  run seed_git_identity
+  [ "$status" -eq 0 ]
+  [ ! -e "$calls" ]
+  CFG[git_name]="Ada Lovelace"
+  run seed_git_identity
+  [ "$(cat "$calls")" = "runuser|-u|pyre|--|env|HOME=/home/pyre|pyre|dev|git|--name|Ada Lovelace|" ]
+  CFG[git_email]="ada@example.org"
+  : >"$calls"
+  run seed_git_identity
+  [[ "$(cat "$calls")" == *"|--name|Ada Lovelace|--email|ada@example.org|" ]]
 }
 
 @test "autologin defaults to off and must be a boolean" {

@@ -9,6 +9,13 @@
 # from the bundles and themes that are installed. Only a row this command
 # lists can be picked, and what it does is fixed here: the data files hold
 # words and package names, never commands (ADR 0021).
+#
+# One kind of row installs from outside the Arch repositories (ADR 0022): a
+# vendor row runs the installer its maker publishes, into the home directory
+# and without root. Which installers exist, and what each runs, is in
+# menu_vendor below, not in a data file.
+
+readonly MENU_CLAUDE_INSTALLER=https://claude.ai/install.sh
 
 # shellcheck source=src/cli/lib/bundles.sh
 source "$PYRE_LIB/lib/bundles.sh"
@@ -93,6 +100,13 @@ menu_rows() {
       theme-list) menu_themes ;;
       hibernate) ! menu_resume_set || menu_row "$title" "$desc" "$verb" "" ;;
       aur) ! menu_aur_helper >/dev/null || menu_row "$title" "$desc" "$verb" "" ;;
+      vendor)
+        if menu_vendor_installed "$arg"; then
+          menu_row "Remove › ${title#Install › }" "Takes it out of your home; its settings stay" vendor-remove "$arg"
+        else
+          menu_row "$title" "$desc" "$verb" "$arg"
+        fi
+        ;;
       *) menu_row "$title" "$desc" "$verb" "$arg" ;;
     esac
   done < <(menu_data menu.tsv) | { grep -v -e "'" -e '[\]' || true; }
@@ -120,7 +134,7 @@ menu_shell() {
 menu_act() {
   local verb="$1" arg="$2" file
   case "$verb" in
-    term | install | remove | search | aur) menu_term "$verb" "$arg" ;;
+    term | install | remove | search | aur | vendor | vendor-remove) menu_term "$verb" "$arg" ;;
     launcher) menu_shell panel-open launcher "$arg" ;;
     panel) menu_shell panel-open "$arg" ;;
     settings) menu_shell settings-open ;;
@@ -176,11 +190,14 @@ menu_known_packages() {
 # menu_online PKG: true when an install can start: a network, and package
 # lists that know PKG. After an install without a network pacman has no lists
 # yet; an update fetches them, so it is offered first.
+menu_network() {
+  [[ "$(nmcli networking connectivity 2>/dev/null)" != none ]] && return 0
+  printf 'This machine is offline. Installing needs a network connection.\n'
+  return 1
+}
+
 menu_online() {
-  if [[ "$(nmcli networking connectivity 2>/dev/null)" == none ]]; then
-    printf 'This machine is offline. Installing needs a network connection.\n'
-    return 1
-  fi
+  menu_network || return 1
   pacman -Si -- "$1" >/dev/null 2>&1 && return 0
   printf 'PyreOS has no package lists yet. An update fetches them, and the install\nfollows it.\n\n'
   confirm "Update the system now?" || return 1
@@ -191,6 +208,57 @@ menu_install() {
   menu_online "$1" || return 1
   as_root pacman -S --needed -- "$@" ||
     { printf '\nIf pacman could not fetch a file, the package lists are old: run Update first.\n'; return 1; }
+}
+
+# menu_after_install PKG...: what an app needs once, after its packages.
+menu_after_install() {
+  [[ " $* " == *" docker "* ]] || return 0
+  printf '\nDocker is installed, and does not run yet.\n'
+  if confirm "Start Docker now and at every boot?"; then
+    as_root systemctl enable --now docker.socket || return 1
+  fi
+  printf '\nDocker needs sudo. To use it without: sudo usermod -aG docker %s, then log\nout and in. Whoever is in that group can act as root on this machine.\n' "${USER:-$(id -un)}"
+}
+
+menu_vendor_installed() {
+  case "$1" in
+    claude) [[ -e "$HOME/.local/bin/claude" || -L "$HOME/.local/bin/claude" ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# menu_vendor install|remove NAME: run the installer NAME's maker publishes,
+# or undo it the way the maker documents. It says what it will run and asks
+# first. The script is fetched whole before it runs, so a broken download
+# runs nothing.
+menu_vendor() {
+  local script status=0
+  case "$1 $2" in
+    "install claude")
+      printf 'Claude Code is proprietary software from Anthropic. It is not part of PyreOS\nor of Arch, and it needs an account with Anthropic.\n\n'
+      printf 'This fetches the installer Anthropic publishes and runs it as you, not as root:\n\n  %s\n\n' "$MENU_CLAUDE_INSTALLER"
+      printf 'It puts the claude command in ~/.local/bin and its files in\n~/.local/share/claude. Claude Code then updates itself: pacman and pyre update\ndo not manage it.\n\n'
+      confirm "Run the installer?" || return 1
+      menu_network || return 1
+      script="$(mktemp)"
+      if curl -fsSL -o "$script" -- "$MENU_CLAUDE_INSTALLER"; then
+        bash "$script" || status=$?
+      else
+        printf 'The installer could not be fetched.\n'
+        status=1
+      fi
+      rm -f -- "$script"
+      (( status == 0 )) && printf '\nStart it in a terminal, in the folder of a project: claude\n'
+      return "$status"
+      ;;
+    "remove claude")
+      printf 'This removes Claude Code from your home: ~/.local/bin/claude and\n~/.local/share/claude. Your settings in ~/.claude stay.\n\n'
+      confirm "Remove it?" || return 1
+      rm -f -- "$HOME/.local/bin/claude"
+      rm -rf -- "$HOME/.local/share/claude"
+      ;;
+    *) die "menu: no vendor installer named ${2:-}" ;;
+  esac
 }
 
 # menu_find TOOL LIST-OPTION: pick packages from a searchable list of
@@ -213,7 +281,7 @@ menu_run() {
   case "$verb" in
     term)
       case "$arg" in
-        update | doctor | hw | snapshot) "$PYRE_BIN" "$arg" || status=$? ;;
+        update | doctor | hw | snapshot | dev) "$PYRE_BIN" "$arg" || status=$? ;;
         about) fastfetch || status=$? ;;
         *) die "menu: nothing to run named $arg" ;;
       esac
@@ -224,12 +292,14 @@ menu_run() {
       # line is sudo asking for the password.
       if [[ "$verb" == install ]]; then
         printf 'Installing %s\n\n' "${pkgs[*]}"
-        menu_install "${pkgs[@]}" || status=$?
+        { menu_install "${pkgs[@]}" && menu_after_install "${pkgs[@]}"; } || status=$?
       else
         printf 'Removing %s\n\n' "${pkgs[*]}"
         as_root pacman -Rs -- "${pkgs[@]}" || status=$?
       fi
       ;;
+    vendor) menu_vendor install "$arg" || status=$? ;;
+    vendor-remove) menu_vendor remove "$arg" || status=$? ;;
     search) menu_find pacman -Slq || status=$? ;;
     aur)
       helper="$(menu_aur_helper)" || die "menu: no AUR helper (paru or yay) is installed"

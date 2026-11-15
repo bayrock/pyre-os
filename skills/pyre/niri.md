@@ -1,6 +1,6 @@
 # niri: keys, screens, windows
 
-niri is the compositor. It places windows side by side in columns on an endless horizontal strip, with workspaces stacked vertically on each screen. PyreOS keeps niri's own behavior and keys, so niri's documentation applies unchanged: <https://github.com/niri-wm/niri/wiki>.
+niri is the compositor. It places windows side by side in columns on an endless horizontal strip, with workspaces stacked vertically on each screen. PyreOS keeps niri's own behavior, so niri's documentation applies: <https://github.com/niri-wm/niri/wiki>. The keys are PyreOS's own (`pyre keys --list`), not the ones niri's wiki lists.
 
 ## The files
 

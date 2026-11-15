@@ -98,7 +98,7 @@ Each include mechanism is verified for real in P3 before it is relied on.
 
 `pyre-install` is a thin gum TUI.
 
-**It asks for:** the target disk (the list shows what each disk holds now), hostname, user and password, the LUKS passphrase, timezone, locale and keyboard layout, autologin, and hibernation. Optional bundles are still to come.
+**It asks for:** the target disk (the list shows what each disk holds now), hostname, user and password, the LUKS passphrase, timezone, locale and keyboard layout, autologin, hibernation, an optional name and email for git, and whether to install the development tools (ADR 0022).
 
 **It generates an archinstall JSON config** and runs archinstall with `--skip-boot`. Arch-maintained code does the disk, LUKS2, btrfs, subvolume, and base-system work.
 
@@ -163,7 +163,7 @@ Bundles are meta-packages: `pyre-bundle-dev`, `-media` and `-office`. `pyre inst
 - **`-gaming`** needs `[multilib]` enabled in `pacman.conf`, which is the admin's file.
 - **`-lazyvim`** needs a per-user LazyVim checkout, which is not a package payload.
 
-The installer will offer bundles once the TUI is exercised.
+The installer offers the `dev` bundle, whose packages are in the ISO's offline repository (ADR 0022). The others need a network, so they are offered on the installed system only.
 
 ### Theme system (`themes/`, package `pyre-themes`, ADR 0015)
 
@@ -195,6 +195,13 @@ The installer will offer bundles once the TUI is exercised.
 - **In the launcher,** two dmenu providers in `defaults/noctalia/pyre.toml` show them: `/pyre` (also part of the ordinary search) and `/keys`. `Mod+Alt+Space` and `Mod+K` open the launcher on them.
 - `tools/check-catalog` checks, against a sync database, that every catalog package is in `core` or `extra`.
 
+### Development setup (ADR 0022)
+
+- **`pyre dev`** asks about each part that is missing: the git name and email, the `dev` bundle, the GitHub sign-in, a Rust toolchain. `pyre dev git` writes the identity into the user's own git config and names the keyring as git's credential store; the installer runs it for the first user when a name or email was given.
+- **The installer** offers the `dev` bundle from the ISO's offline repository. The welcome panel and the menu open `pyre dev` in the floating terminal.
+- **`~/.local/bin` is on `PATH`** (`/etc/profile.d/pyre-local-bin.sh`, from `pyre-desktop`).
+- **A vendor row** in the menu runs an app's own installer as the user, into the home. The installer is a function in `pyre menu`, not data; Claude Code is the only one.
+
 ### Remind me (`src/cli/commands/remind`, `src/desktop/remind/`, ADR 0020)
 
 - `pyre remind <when> [message]` sets a reminder: `10m tea`, `5pm call mum`, `tomorrow 9am standup`, or the time last, `call mum in 2 hours`. `pyre remind list` and `pyre remind cancel` manage them.
@@ -204,7 +211,7 @@ The installer will offer bundles once the TUI is exercised.
 ### CLI (`src/cli/`, package `pyre-cli`)
 
 - **One entrypoint,** `pyre <command>` (ADR 0014). Commands are files in `/usr/lib/pyre/commands/` with `# help:` and `# usage:` header metadata. The shared library is in `/usr/lib/pyre/lib/`, and the reconcile units are in `/usr/lib/pyre/reconcile/{system,user}/`.
-- **Commands:** `update`, `snapshot`, `rollback`, `doctor`, `reconcile`, `hw`, `install`/`remove <bundle>`, `theme`, `keys`, `menu`, `welcome`, `remind`, `help`.
+- **Commands:** `update`, `snapshot`, `rollback`, `doctor`, `reconcile`, `hw`, `install`/`remove <bundle>`, `theme`, `keys`, `menu`, `welcome`, `remind`, `dev`, `help`.
 - **Triggers:** an ALPM hook (`pyre-reconcile.hook`) runs system reconcile after `pyre-*` packages change, and `pyre-reconcile.service` (a user unit enabled globally) runs user reconcile at login. `pyre-remind.service` sets the reminders' timers when the desktop starts.
 - **Budget:** under 5,000 lines total for the CLI plus the installer before 1.0. Every command needs a test, and anything over budget needs a reason in its ADR.
 
@@ -254,7 +261,7 @@ themes/                    theme data: theme.toml and a Noctalia palette per the
 skills/                    → /usr/share/pyre/skills (the agent skill, for coding agents on an installed machine)
 iso/                       archiso profile (releng-derived)
 tests/                     bats unit tests, VM e2e scenarios
-tools/                     build-pkgs, build-iso, run-vm, test-e2e, test-remind, publish-repo
+tools/                     build-pkgs, build-iso, run-vm, test-e2e, test-remind, test-dev, publish-repo
 docs/                      brief, architecture, roadmap, status, handoff, decisions/, reference/,
                            guide/ (the user guide, → /usr/share/doc/pyre/guide)
 landing/                   the website: site/ is published to GitHub Pages as-is

@@ -11,6 +11,8 @@ readonly LUKS_ITER_MS=2000
 # takes the first provider: jack2 (which conflicts with pipewire-jack), an
 # arbitrary ttf-font, and an arbitrary xdg-desktop-portal-impl.
 readonly INSTALL_PACKAGES=(pyre-desktop pipewire-jack noto-fonts xdg-desktop-portal-gnome)
+# The development tools, when the user asks for them (ADR 0022).
+readonly DEV_PACKAGE=pyre-bundle-dev
 
 # root_partition_mib DISK_BYTES: size of the LUKS partition in MiB. It starts
 # after 1 MiB of alignment space and the ESP, and leaves the last MiB free
@@ -29,6 +31,8 @@ swap_mib() {
 # archinstall_config DISK_BYTES SECTOR_BYTES ESP_ID ROOT_ID: print the config JSON.
 archinstall_config() {
   local disk_bytes="$1" sector="$2" esp_id="$3" root_id="$4" root_mib need_mib=16384 hibernation=false
+  local packages=("${INSTALL_PACKAGES[@]}")
+  [[ "${CFG[dev_tools]}" != true ]] || packages+=("$DEV_PACKAGE")
   root_mib="$(root_partition_mib "$disk_bytes")"
   if [[ "${CFG[hibernation]}" == true ]]; then
     hibernation=true
@@ -42,7 +46,7 @@ archinstall_config() {
     --arg esp_id "$esp_id" --arg root_id "$root_id" \
     --arg hostname "${CFG[hostname]}" --arg timezone "${CFG[timezone]}" \
     --arg locale "${CFG[locale]}" --arg keymap "${CFG[keymap]}" \
-    --argjson packages "$(printf '%s\n' "${INSTALL_PACKAGES[@]}" | jq -R . | jq -s .)" '
+    --argjson packages "$(printf '%s\n' "${packages[@]}" | jq -R . | jq -s .)" '
     def size($v; $u): {value: $v, unit: $u, sector_size: {value: $ss, unit: "B"}};
     def part($id; $start; $len): {
       obj_id: $id, status: "create", type: "primary", dev_path: null,

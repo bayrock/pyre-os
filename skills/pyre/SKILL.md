@@ -68,6 +68,7 @@ The rest is stock Arch Linux: pacman, systemd, PipeWire, NetworkManager, bluez, 
 | `pyre doctor` | Checks kernels, boot entries, snapshots and PyreOS state, and says what to do about each problem |
 | `pyre theme` | Lists the themes; `pyre theme set <name>` switches, live |
 | `pyre install`, `pyre remove` | Adds or removes a bundle of apps: `dev`, `media`, `office` |
+| `pyre dev` | Sets up for development, asking about each part: the git name and email, the `dev` bundle, the GitHub sign-in, a Rust toolchain. `pyre dev --status` shows the state and changes nothing; `pyre dev git --name … --email …` writes the identity without asking |
 | `pyre menu` | Opens the PyreOS menu in the launcher (**Super + Alt + Space**): optional apps to install or remove, update, themes, settings, system. `pyre menu --list` prints its rows |
 | `pyre keys` | Opens the key list (**Super + K**); `pyre keys --list` prints every key with what it does, the user's own binds included |
 | `pyre hw` | Shows the hardware rules that match this machine; `pyre hw apply` installs their drivers and settings |
@@ -106,6 +107,7 @@ The rest is stock Arch Linux: pacman, systemd, PipeWire, NetworkManager, bluez, 
 - "Lock after five minutes" → override `[idle.behavior.lock]` in `~/.config/noctalia/config.toml` ([`noctalia.md`](noctalia.md))
 - "Bigger terminal font" → `[main]` `font=` in `~/.config/foot/foot.ini`, below the includes
 - "Install the developer tools" → `pyre install dev`
+- "Set up git" or "get this machine ready for coding" → `pyre dev` in a terminal, since it asks questions; check first with `pyre dev --status`. Git's settings are the user's own file, `~/.config/git/config`
 - "Update my system" → `pyre update`, in a terminal the user can type a password in
 - "The update broke something" → the steps in [`lifecycle.md`](lifecycle.md): boot the snapshot from before it, then `pyre rollback`
 - "Is my system healthy?" → `pyre doctor`

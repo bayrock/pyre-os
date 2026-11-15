@@ -39,7 +39,9 @@ fi
 [[ -n "$iso" && -f "$iso" ]] || { echo "test-e2e: no ISO found; build one with sudo tools/build-iso" >&2; exit 1; }
 
 stage_install() {
-  install_from_iso "$iso" "pyre_repo = \"$pyre_repo\""
+  # A git identity and no development tools (ADR 0022); tools/test-machine
+  # answers yes to the tools.
+  install_from_iso "$iso" "pyre_repo = \"$pyre_repo\"" 'git_name = "Pyre Tester"' 'git_email = "tester@example.org"'
 }
 
 stage_first_boot() {
@@ -62,6 +64,11 @@ stage_first_boot() {
   # --- lifecycle state from the installer (P4, ADR 0014) ------------------------
   expect reconcile-system 'cat /var/lib/pyre/reconcile/system' '^[1-9][0-9]*$'
   expect reconcile-user 'cat /home/'"$user"'/.local/state/pyre/reconcile/user' '^[1-9][0-9]*$'
+  # The installer wrote the git identity as the user, into the XDG file, with
+  # the keyring as the credential store; the development tools were not asked for.
+  # shellcheck disable=SC2016 # typed into the guest verbatim.
+  expect git-identity 'f=/home/'"$user"'/.config/git/config; echo "$(stat -c %U "$f")|$(git config --file "$f" user.name)|$(git config --file "$f" user.email)|$(git config --file "$f" credential.helper)|$([ -e /home/'"$user"'/.gitconfig ] || echo no-gitconfig)"' '^'"$user"'\|Pyre Tester\|tester@example\.org\|/usr/lib/git-core/git-credential-libsecret\|no-gitconfig$'
+  expect no-dev-tools 'pacman -Qq pyre-bundle-dev 2>/dev/null | wc -l' '^0$'
   # The agent skill (ADR 0019), linked for the first user by that reconcile.
   # shellcheck disable=SC2016 # typed into the guest verbatim.
   expect agent-skill 'for d in .claude .agents; do [ "$(readlink /home/'"$user"'/$d/skills/pyre)" = /usr/share/pyre/skills/pyre ] && grep -qx "name: pyre" /home/'"$user"'/$d/skills/pyre/SKILL.md && echo linked; done | wc -l' '^2$'
@@ -141,6 +148,12 @@ stage_desktop() {
 
   # The key list and the PyreOS menu live in the launcher (ADR 0021).
   expect keys-list 'u pyre keys --list | grep -c .' '^1[0-9][0-9]$'
+  # ADR 0022: ~/.local/bin is on the session's PATH, and pyre dev sees the
+  # identity the installer wrote; the menu offers the agents and the setup.
+  expect local-bin-path 'tr "\0" "\n" < /proc/$(pgrep -u '"$user"' -x niri | head -n 1)/environ | grep "^PATH="' '^PATH=/home/'"$user"'/\.local/bin:'
+  expect dev-status 'u env HOME=/home/'"$user"' pyre dev --status | tr -s " "' 'Git identity Pyre Tester <tester@example\.org>'
+  expect dev-status-store 'u env HOME=/home/'"$user"' pyre dev --status | tr -s " "' 'Credentials kept in the keyring'
+  expect menu-dev-rows 'u pyre menu --list | grep -c -e "^Install .* Claude Code" -e "^Install .* Codex" -e "^Install .* opencode" -e "^Setup .* Development"' '^4$'
   expect menu-list 'u pyre menu --list | grep -c -e "^Install " -e "^Theme " -e "^Update "' '^[1-9][0-9]$'
   send_keys meta_l-k
   sleep 3
