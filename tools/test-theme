@@ -78,7 +78,10 @@ start_vm install-packages --net --boot-disk
 unlock_and_login
 expect share 'mkdir -p /mnt/share && mount -t 9p -o trans=virtio pyre-share /mnt/share && echo mounted' '^mounted$'
 # Arch packages (adw-gtk-theme) come from the network, [pyre] from the testing channel.
-expect install 'printf "Server = https://github.com/bayrock/pyre-os/releases/download/testing\n" > /etc/pacman.d/pyre-mirrorlist; pacman -Sy >/dev/null 2>&1; pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-theme-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-theme-install.log' '^rc=0$'
+# The guest's package server changes here, so the refresh is forced (-Syy):
+# a plain one keeps a [pyre] database newer than the channel's and fetches
+# only the channel's signature for it, which then does not match.
+expect install 'printf "Server = https://github.com/bayrock/pyre-os/releases/download/testing\n" > /etc/pacman.d/pyre-mirrorlist; pacman -Syy >/dev/null 2>&1; pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-theme-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-theme-install.log' '^rc=0$'
 expect installed 'pacman -Q pyre-themes adw-gtk-theme | wc -l' '^2$'
 # pyre-base's hook put the PyreOS block at the top of limine.conf, and the
 # entries limine-entry-tool wrote are all still there.

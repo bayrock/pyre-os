@@ -82,7 +82,10 @@ wait_prompt() { # the splash's unlock field is on screen
 start_vm setup --net --boot-disk
 unlock_and_login
 expect share 'mkdir -p /mnt/share && mount -t 9p -o trans=virtio pyre-share /mnt/share && echo mounted' '^mounted$'
-expect install 'printf "Server = https://github.com/bayrock/pyre-os/releases/download/testing\n" > /etc/pacman.d/pyre-mirrorlist; pacman -Sy >/dev/null 2>&1; pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-splash-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-splash-install.log' '^rc=0$'
+# The guest's package server changes here, so the refresh is forced (-Syy):
+# a plain one keeps a [pyre] database newer than the channel's and fetches
+# only the channel's signature for it, which then does not match.
+expect install 'printf "Server = https://github.com/bayrock/pyre-os/releases/download/testing\n" > /etc/pacman.d/pyre-mirrorlist; pacman -Syy >/dev/null 2>&1; pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-splash-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-splash-install.log' '^rc=0$'
 expect boot-step 'sed -i "s/^HOOKS=.*/HOOKS=('"$hooks"')/" /etc/mkinitcpio.conf && plymouth-set-default-theme pyre && sed -i "s/^KERNEL_CMDLINE\[default\]+=\"/&quiet splash plymouth.ignore-serial-consoles /" /etc/default/limine && limine-update >/var/log/test-splash-update.log 2>&1; echo rc=$?' '^rc=0$'
 expect theme 'plymouth-set-default-theme' '^pyre$'
 expect cmdline 'grep -c "quiet splash" /boot/limine.conf' '^[1-9]'

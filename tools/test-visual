@@ -95,8 +95,15 @@ wait_pixel() {
 start_vm setup --net --boot-disk
 unlock_and_login
 expect share 'mkdir -p /mnt/share && mount -t 9p -o trans=virtio pyre-share /mnt/share && echo mounted' '^mounted$'
-expect install 'printf "Server = https://github.com/bayrock/pyre-os/releases/download/testing\n" > /etc/pacman.d/pyre-mirrorlist; pacman -Sy >/dev/null 2>&1; pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-visual-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-visual-install.log' '^rc=0$'
+# The guest's package server changes here, so the refresh is forced (-Syy):
+# a plain one keeps a [pyre] database newer than the channel's and fetches
+# only the channel's signature for it, which then does not match.
+expect install 'printf "Server = https://github.com/bayrock/pyre-os/releases/download/testing\n" > /etc/pacman.d/pyre-mirrorlist; pacman -Syy >/dev/null 2>&1; pacman -U --noconfirm /mnt/share/pkgs/*.pkg.tar.zst > /var/log/test-visual-install.log 2>&1; echo rc=$?; tail -n 2 /var/log/test-visual-install.log' '^rc=0$'
 expect boot-step 'sed -i "s/^HOOKS=.*/HOOKS=('"$hooks"')/" /etc/mkinitcpio.conf && plymouth-set-default-theme pyre && sed -i "s/^KERNEL_CMDLINE\[default\]+=\"/&quiet splash plymouth.ignore-serial-consoles /" /etc/default/limine && limine-update >/var/log/test-visual-update.log 2>&1; echo rc=$?' '^rc=0$'
+# The base disk's user has usually logged in before (test-e2e's desktop
+# stage). Forget that the welcome panel was shown, so that the login below is
+# a first login again.
+expect first-login 'rm -f /home/'"$user"'/.local/state/pyre/welcome/shown; test ! -e /home/'"$user"'/.local/state/pyre/welcome/shown && echo forgotten' '^forgotten$'
 power_off
 
 # --- 2. boot: Limine, the splash, the login screen ---------------------------------
@@ -124,6 +131,8 @@ greeter_login
 expect dnd 'u noctalia msg notification-dnd-toggle; echo rc=$?' '^rc=0$'
 expect welcome-shown 'for _ in $(seq 90); do test -e /home/'"$user"'/.local/state/pyre/welcome/shown && break; sleep 1; done; test -e /home/'"$user"'/.local/state/pyre/welcome/shown && echo shown' '^shown$'
 sleep 6
+grep -q '"panelOpen":true' <<<"$(noctalia_status welcome | tr -d '[:space:]')" || die "the welcome panel is not open at the first login"
+pass "the welcome panel opened by itself"
 shoot welcome
 expect welcome-guide 'u pyre welcome guide; echo rc=$?' '^rc=0$'
 sleep 4
@@ -156,9 +165,9 @@ send_keys esc
 sleep 1
 
 # --- 5. the lock screen -----------------------------------------------------------
-send_keys meta_l-alt-l
+send_keys meta_l-ctrl-l
 sleep 6
-grep -q '"locked":true' <<<"$(noctalia_status lock)" || die "Super+Alt+L did not lock"
+grep -q '"locked":true' <<<"$(noctalia_status lock)" || die "Mod+Ctrl+L did not lock"
 expect locked-hint 'loginctl show-session $(loginctl show-user '"$user"' -p Display --value) -p LockedHint --value' '^yes$'
 type_keys "$password"$'\n'
 sleep 4
