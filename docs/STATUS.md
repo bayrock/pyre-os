@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-14
+Last updated: 2026-11-15
 
 ## Current phase
 
@@ -34,7 +34,7 @@ Last updated: 2026-11-14
 - **`tools/test-machine`:** all four stages, 74 checks in 7 min 41 s. The interactive installer, typed at the keyboard, onto a disk that held an MBR table, FAT and LUKS, next to a stand-in Windows disk; then every row marked "Done in the VM" above. The desktop powered off in 4 s.
 - **`tools/test-nvidia`:** both stages, 20 checks in 13 min 13 s. The installer applied the NVIDIA rule with no failed hook and no snapshots; DKMS built `nvidia-open` 620.70.06 for both kernels; each initramfs holds the four modules; the system boots and unlocks; a second apply changes nothing, and an apply without the GPU removes the drop-ins.
 - **After that ISO** (2026-11-14, `--local-packages`, with `pyre-cli` 0.5.0 and `pyre-desktop` 0.5.0: the keymap, key list and menu, on top of the agent skill, night light and reminders): `tools/test-e2e` passed every stage from a fresh install, 124 checks. On overlays of that install, `tools/test-remind` passed 45 checks, `tools/test-theme` 83 and `tools/test-visual` 38, with the welcome panel, its guide and every theme captured. `test-machine` and `test-nvidia` have not run with these packages; they run on the rebuilt ISO.
-- **CI** is green on `main`, and the testing channel carries `pyre-cli` 0.4.0 and `pyre-desktop` 0.4.0 since 2026-11-15 00:06 UTC.
+- **CI** is green on `main` (check, packages and publish), and the testing channel carries `pyre-cli` 0.5.0 and `pyre-desktop` 0.5.0 since 2026-11-15.
 - **`tools/check`:** passes, with new bats tests for the swapfile and resume arguments, ESP detection, the autologin keyring, the resume-offset check, `HW_SYS`, and the boot-branding hook before Limine exists.
 
 **Found on the way:**
